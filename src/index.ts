@@ -5,6 +5,8 @@ import { SESSION } from './config'
 import { createWatcher } from './boss/watcher'
 import { initImprint } from './combat/imprint'
 import { createTracerPool } from './effects/tracers'
+import { initEchoes } from './echoes/echoSystem'
+import { createEchoViews } from './echoes/echoView'
 import { state } from './game/state'
 import { setupHud } from './ui/hud'
 
@@ -18,6 +20,8 @@ export function main() {
   createWatcher()
   createTracerPool()
   initImprint()
+  initEchoes()
+  createEchoViews()
   setupHud()
-  console.log('[FinalRehearsal] M1 loaded')
+  console.log('[FinalRehearsal] M2 loaded')
 }

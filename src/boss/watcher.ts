@@ -60,7 +60,7 @@ export function createWatcher() {
 
   // Robes: tall tapering column that fades into the floor shadow.
   part(body, Vector3.create(0, 1.5, 0), Vector3.create(2.2, 3.4, 2.2), COLORS.obsidian, 'cylinder', { radiusTop: 0.16, radiusBottom: 0.5 })
-  part(body, Vector3.create(0, 3.35, -0.05), Vector3.create(1.05, 1.2, 1.0), COLORS.charcoal, 'sphere') // hood / shoulders
+  part(body, Vector3.create(0, 3.35, -0.05), Vector3.create(1.05, 1.2, 1.0), COLORS.charcoal, 'cylinder', { radiusTop: 0.3, radiusBottom: 0.5 }) // hood / shoulders
   // Elongated ivory mask with a narrow vertical slit and a luminous eye.
   part(body, Vector3.create(0, 3.45, 0.42), Vector3.create(0.42, 0.95, 0.12), COLORS.ivory, 'box')
   part(body, Vector3.create(0, 3.5, 0.485), Vector3.create(0.05, 0.42, 0.02), COLORS.obsidian, 'box')
@@ -80,7 +80,7 @@ export function createWatcher() {
     Transform.create(ring, { parent: body, position: Vector3.create(0, 3.5, -0.55) })
     for (let i = 0; i < spec.beads; i++) {
       const a = (i / spec.beads) * Math.PI * 2
-      part(ring, Vector3.create(Math.cos(a) * spec.radius, Math.sin(a) * spec.radius, 0), Vector3.create(0.1, 0.1, 0.1), COLORS.silver, 'sphere', { emissive: 0.4 })
+      part(ring, Vector3.create(Math.cos(a) * spec.radius, Math.sin(a) * spec.radius, 0), Vector3.create(0.11, 0.11, 0.11), COLORS.silver, 'box', { emissive: 0.4 })
     }
     rings.push({ entity: ring, speed: spec.speed })
   }

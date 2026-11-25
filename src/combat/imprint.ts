@@ -7,7 +7,8 @@ import { ARENA, BOSS, COLORS, IMPRINT } from '../config'
 import { computeShot, sectorOf } from './aim'
 import { bossHitVolume } from '../boss/watcher'
 import { spawnTracer } from '../effects/tracers'
-import { state } from '../game/state'
+import { damageBoss, state } from '../game/state'
+import { leaveEcho } from '../echoes/echoSystem'
 import { v3 } from '../math/vec'
 
 let lockRequestedAt = -1
@@ -65,15 +66,15 @@ function imprintSystem() {
   spawnTracer(castOrigin, shot.end, COLORS.echoCyan, shot.hit)
 
   if (shot.hit) {
-    const dmg = Math.min(IMPRINT.directDamage, state.bossHp)
-    state.bossHp -= dmg
+    const dmg = damageBoss(IMPRINT.directDamage)
     state.hits++
-    state.bossFlashUntil = state.time + 0.12
     state.lastShot = { kind: 'hit', damage: dmg, assisted: shot.assisted, at: state.time }
-    if (state.bossHp <= 0) console.log('[FinalRehearsal] M1: boss HP reached 0 (victory flow arrives in M3)')
   } else {
     state.lastShot = { kind: 'miss', damage: 0, assisted: false, at: state.time }
   }
+
+  // Every cast leaves an echo where the caster stood, remembering this exact direction.
+  leaveEcho(v3(player.x, player.y, player.z), castOrigin, shot.dir)
 }
 
 /** M1 test helper: full boss health again. */

@@ -76,7 +76,15 @@ export const ECHO = {
   maxSlots: 4,
   maxCorrupted: 1,
   /** Casting within this distance of an existing echo refreshes it instead of adding one. */
-  minSeparation: 2
+  minSeparation: 2,
+  /**
+   * Forgiving synchronization (brief 7.2 allows it): a new or refreshed echo joins the cycle of
+   * the existing formation if its natural first repeat would land within this many seconds of
+   * the formation's beat. 2.0 = always joins (formation stays in phase); 0 = no snapping.
+   */
+  phaseSnap: 2,
+  /** A snapped echo never repeats sooner than this after being placed. */
+  minFirstDelay: 2
 } as const
 
 export const CONVERGENCE = {

@@ -8,8 +8,8 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 | | Milestone | State |
 | --- | --- | --- |
 | M0 | Setup: SDK7 scaffold, skills, World config, build | **Done** (verified in local preview) |
-| M1 | Greybox arena, placeholder Watcher, Imprint shot | **Built, build + 13 unit tests pass; in-client test by creator pending** |
-| M2 | Echoes, repeat timing, Convergence (go/no-go) | Not started |
+| M1 | Greybox arena, placeholder Watcher, Imprint shot | **Done**: creator verified in Chrome 2026-11-25 (6/7 hits, HP bar, sectors, ~30 FPS) |
+| M2 | Echoes, repeat timing, Convergence (go/no-go) | **Built, build + 25 unit tests pass; creator playtest pending (go/no-go)** |
 | M3 | Player HP, Gaze, Aftershock, victory/defeat/retry | Not started |
 | M4 | Corruption, Blind Spot, phase gates, final barrier, timeout | Not started |
 | M5 | Real Watcher and chamber assets | Not started |
@@ -36,6 +36,16 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Session clock: one dt-accumulated clock (clamped at 0.1 s/frame), runs before all other systems.
 - Tests: `npm test` (tsx + node:test) covers hit volume, range, caps, aim assist, sky shots, fixed-direction repeats, sectors with hysteresis.
 
+## M2 record
+
+- Every Imprint leaves an echo at the caster's floor position storing the shot's origin and direction (`src/echoes/echoLogic.ts`, pure + tested). Repeats fire the same direction every 4 s for 3 damage; they never home in.
+- Placement: within 2 m of a friendly echo → refresh (direction, timer, recency); free slot → new; 4 slots full → replace oldest friendly (never corrupted); outside the engraved floor (r > 12 m) → no echo, feedback line.
+- **Deviation (brief 7.2 allows it): forgiving synchronization.** A new or refreshed echo joins the formation's beat if its natural first repeat is within `ECHO.phaseSnap` (2 s) of it, never sooner than 2 s after placement. With 2 s the formation is always in phase, so the first echo repeats at exactly 4 s and later ones in 2–6 s. Set `phaseSnap` lower to make timing a skill again.
+- Convergence (E): friendly echoes due within 1 s join; needs ≥2, otherwise a message and no cooldown. Participants fire at once (gold beams), share a new cycle, golden links drawn between them in order around the boss. One damage event: 2/3/4 hitting beams → 12/24/40 (replaces echo damage); sectors of hitting echoes recorded for later phase gates. 6 s cooldown.
+- Visuals: translucent cyan spectral figure with a casting arm pointing along the remembered direction; floor rune fills over the cycle and turns gold in the ready window; flash on repeat. Crimson look reserved for corruption (M4).
+- HUD: 4 echo slots (countdown, READY, "next" = replacement candidate when full), Convergence indicator (glows gold when valid, shows cooldown), feedback line, staged contextual hints.
+- Watcher beads and hood changed from spheres to boxes/cylinders (M1 preview showed 56.6k triangles of the 90k budget).
+
 ## Scene budget (9 parcels)
 
 90,000 triangles · 1,800 entities · 66 materials · 33 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
@@ -50,4 +60,4 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 
 ## Next step
 
-Creator: pull and test M1 (aiming feel, hit reliability, crosshair, controls in browser and Desktop Client). Then M2: echoes + Convergence.
+Creator: playtest M2 (go/no-go): is placing echoes and firing a Convergence understandable and fun? Is E reliable? New triangle count? Then M3 (player HP, Gaze, Aftershock, victory/defeat/retry). Watcher GLB from Aholo can be integrated as soon as it arrives.
