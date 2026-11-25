@@ -187,7 +187,7 @@ function Debug() {
     <UiEntity
       uiTransform={{ positionType: 'absolute', position: { bottom: 8, right: 8 }, width: 470, height: 24 }}
       uiBackground={{ color: Color4.create(0, 0, 0, 0.5) }}
-      uiText={{ value: `M2 debug · last: ${last} · hits ${state.hits}/${state.shots}${conv} · sector ${sector} · F = refill boss`, fontSize: 11, color: c(COLORS.ash) }}
+      uiText={{ value: `M2 debug · last: ${last} · hits ${state.hits}/${state.shots}${conv} · sector ${sector} · F refill · 1 mask`, fontSize: 11, color: c(COLORS.ash) }}
     />
   )
 }

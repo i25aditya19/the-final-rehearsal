@@ -46,6 +46,16 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - HUD: 4 echo slots (countdown, READY, "next" = replacement candidate when full), Convergence indicator (glows gold when valid, shows cooldown), feedback line, staged contextual hints.
 - Watcher beads and hood changed from spheres to boxes/cylinders (M1 preview showed 56.6k triangles of the 90k budget).
 
+## Watcher model integration (2026-11-25)
+
+- Source: 4 Aholo GLBs (body, halo, mask, hand), 72 MB and 1.16 M triangles in total, 2048² PNG base + metallic-roughness each. Y-up, +Z front, origin at centre, metres. Halo copper-coloured, hand grey-green.
+- Optimized copies (scripts/asset-pipeline, README there): body 10,984 / helm 1,999 / mask 2,498 / halo 1,500 / hand 2,000 tris; 1.33 MB in total; JPEG base colour (1024/512), metallic-roughness maps replaced by factors; crimson kept only on the eyes, with emissive eye maps. All pass `gltf-transform validate`.
+- **Mask:** the body's built-in head is a dark helm, not an ivory mask. It is split off as `watcher_helm.glb` (cut at the collar, y = 1.59 model units) so it can be hidden; the Aholo ivory mask replaces it for the final transformation (`setVisage('mask')`), so only one is ever visible. Defeat can shatter whichever is shown.
+- Assembly (`src/boss/watcher.ts`): scale 1.3 (about 5.2 m tall, hovering 0.45 m above the floor), helm in the body frame, 3 halo instances (1.5/2.15/2.8 m) behind the head rotating at 16/-10/6 °/s with breathing tilt, 2 spectral hands (left mirrored) drifting and gesturing out of phase, levitation, glide-turn toward the player with slight sway, hit recoil. About 21.5k triangles when visible.
+- Missing or failed GLB → primitive placeholder (logged); still loading after 20 s → placeholder is shown meanwhile. **Preview key 1 toggles helm ↔ mask** (remove before release).
+- Not yet verified in the client: emissive eye glow, metallic halo look under Decentraland lighting, negative-scale (mirrored) hand rendering, double-sided materials.
+- Licensing: GLBs are gitignored until Aholo terms are confirmed; delivered to the creator directly.
+
 ## Scene budget (9 parcels)
 
 90,000 triangles · 1,800 entities · 66 materials · 33 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.

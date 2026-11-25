@@ -41,9 +41,39 @@ export const BOSS = {
   phaseHealth: 100,
   /** Forgiving cylindrical hit volume around the boss. */
   hitRadius: 1.6,
-  hitHeight: 5,
-  /** Height of the boss's centre of mass above the floor. */
-  hoverHeight: 2.5
+  hitHeight: 5.6,
+  /** Height of the boss's centre (model origin) above the floor. */
+  hoverHeight: 3.05
+} as const
+
+/**
+ * The Watcher's modular model (Aholo-generated, optimized copies in assets/boss/).
+ * Model units are metres; the body model is 4.02 m tall with its origin at its centre.
+ * If any file is missing or fails to load, the primitive placeholder is shown instead.
+ */
+export const WATCHER_MODEL = {
+  enabled: true,
+  scale: 1.3,
+  body: 'assets/boss/watcher_body.glb',
+  helm: 'assets/boss/watcher_helm.glb',
+  mask: 'assets/boss/watcher_mask.glb',
+  halo: 'assets/boss/watcher_halo.glb',
+  hand: 'assets/boss/watcher_hand.glb',
+  /** Head centre in body-model units (front is +Z). Halo and mask are placed relative to it. */
+  head: { x: 0, y: 1.78, z: 0 },
+  /** Halo model diameter is 0.30 m; three rings at these world diameters, behind the head. */
+  haloDiameters: [1.5, 2.15, 2.8],
+  haloSpeeds: [16, -10, 6],
+  haloOffsetZ: -0.6,
+  /** Spectral hands floating beside the body (world metres relative to the boss root). */
+  handScale: 1.6,
+  handOffsets: [
+    { x: -2.0, y: 0.2, z: 0.7 },
+    { x: 2.0, y: 0.2, z: 0.7 }
+  ],
+  /** Mask placement when it replaces the helm (final transformation), body-model units. */
+  maskScale: 1.9,
+  maskOffset: { x: 0, y: 1.78, z: 0.15 }
 } as const
 
 export const IMPRINT = {
