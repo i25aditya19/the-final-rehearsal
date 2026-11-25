@@ -17,6 +17,7 @@ import { initAtmosphere } from './scene/atmosphere'
 import { initPhases } from './game/phases'
 import { initCorruption } from './boss/corruption'
 import { initChamber } from './scene/chamber'
+import { initAudio } from './audio/audio'
 
 /** Single session clock. Runs first each frame; large hitches are clamped. */
 function clockSystem(dt: number) {
@@ -38,6 +39,7 @@ export function main() {
   initPhases()
   initCorruption()
   initAttacks()
+  initAudio()
   setupHud()
   console.log('[FinalRehearsal] M4 loaded (phases, corruption, Blind Spot, Final Observation)')
 }
