@@ -99,7 +99,7 @@ function Objective() {
 function AttackWarning() {
   const a = currentAttack()
   if (!a) return null
-  if (a === 'stolen' || a === 'blindspot' || a === 'observation') return null
+  if (a === 'stolen' || a === 'blindspot' || a === 'observation' || a === 'volley') return null
   const text = a === 'gaze' ? 'THE GAZE  ·  step out of the crimson cone' : 'AFTERSHOCK  ·  jump the wave or stand in a pale gap'
   return (
     <UiEntity

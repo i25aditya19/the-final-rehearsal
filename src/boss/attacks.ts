@@ -1,24 +1,24 @@
 // Boss attacks for M3: The Gaze (tracking cone that locks, then fires) and Aftershock (two
 // expanding ring waves with safe gaps; jumping also clears them). One attack at a time, with
 // recovery between them. Visuals are pooled primitives; hit tests are pure (attackMath.ts).
-import { Entity, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { Entity, GltfContainer, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA, ATTACKS, COLORS } from '../config'
 import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
 import { distXZ, headingDeg, sub, v3 } from '../math/vec'
 import { damagePlayer, isActive, say, state } from '../game/state'
 import { corruptionReady, startCorruption, updateCorruption } from './corruption'
-import { sectorOf } from '../combat/aim'
+import { pointSegmentDistance, sectorOf } from '../combat/aim'
 import { watcherEyePosition } from './watcher'
 import { setSparks } from '../effects/vfx'
 import { onReset } from '../game/session'
 
-type AttackKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation'
+type AttackKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation' | 'volley'
 /** Attack order per phase (GAME_DESIGN 7.4 / 8). Phase I introduces Gaze then Aftershock. */
 const SEQUENCES: Record<1 | 2 | 3, AttackKind[]> = {
   1: ['gaze', 'gaze', 'aftershock'],
-  2: ['stolen', 'gaze', 'blindspot', 'aftershock', 'gaze', 'blindspot'],
-  3: ['observation', 'observation', 'stolen', 'observation', 'gaze']
+  2: ['stolen', 'gaze', 'blindspot', 'volley', 'aftershock', 'gaze', 'blindspot', 'volley'],
+  3: ['observation', 'volley', 'observation', 'stolen', 'observation', 'gaze', 'volley']
 }
 /** At a gate only the basic attacks run, so the teaching moment stays readable. */
 const GATE_ALLOWED: AttackKind[] = ['gaze', 'aftershock']
@@ -45,7 +45,6 @@ let gazeBeamGlow: Entity
 const AXIS_FIX = Quaternion.fromEulerDegrees(90, 0, 0)
 
 // ---------------------------------------------------------------- Aftershock state + visuals
-const SEGMENTS = 64
 const ringSegs: Entity[] = []
 const safeLanes: Entity[] = []
 let ringLook = ''
@@ -70,50 +69,39 @@ function glow(e: Entity, hex: string, alpha: number, intensity: number) {
   })
 }
 
+/** Smooth telegraph model (assets/telegraphs, unit radius) with no colliders. */
+const TELE = 'assets/telegraphs/'
+function tele(file: string, parent?: Entity, y = 0.08): Entity {
+  const e = engine.addEntity()
+  Transform.create(e, { parent, position: parent ? Vector3.create(0, y, 0) : HIDDEN, scale: Vector3.Zero() })
+  GltfContainer.create(e, { src: TELE + file, visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+  return e
+}
+const show = (e: Entity, sx: number, sy: number, sz: number) => {
+  Transform.getMutable(e).scale = Vector3.create(sx, sy, sz)
+}
+const hide = (e: Entity) => {
+  Transform.getMutable(e).scale = Vector3.Zero()
+}
+
 export function initAttacks() {
   // Gaze: a fan of floor rays (each in 3 widening segments) plus two bright edge lines.
   gazePivot = engine.addEntity()
   Transform.create(gazePivot, { position: HIDDEN })
-  const g = ATTACKS.gaze
-  const rays = 7
-  const half = g.coneDeg / 2
-  for (let i = 0; i < rays; i++) {
-    const deg = -half + (g.coneDeg * (i + 0.5)) / rays
-    const arm = engine.addEntity()
-    Transform.create(arm, { parent: gazePivot, rotation: Quaternion.fromEulerDegrees(0, deg, 0) })
-    const segLen = g.range / 3
-    for (let s = 0; s < 3; s++) {
-      const far = (s + 1) * segLen
-      const width = 2 * far * Math.tan(((g.coneDeg / rays) * Math.PI) / 360) * 1.05
-      const e = engine.addEntity()
-      Transform.create(e, { parent: arm, position: Vector3.create(0, 0.07 + i * 0.001, s * segLen + segLen / 2), scale: Vector3.create(width, 0.01, segLen) })
-      MeshRenderer.setBox(e)
-      gazeParts.push(e)
-    }
-  }
-  for (const side of [-1, 1]) {
-    const arm = engine.addEntity()
-    Transform.create(arm, { parent: gazePivot, rotation: Quaternion.fromEulerDegrees(0, side * half, 0) })
-    const e = engine.addEntity()
-    Transform.create(e, { parent: arm, position: Vector3.create(0, 0.09, g.range / 2), scale: Vector3.create(0.12, 0.02, g.range) })
-    MeshRenderer.setBox(e)
-    gazeParts.push(e)
-  }
+  // Gaze floor cone: smooth soft-gradient wedge (tracking) and a hot one (locked / firing).
+  gazeParts.push(tele('wedge34_soft.glb', gazePivot), tele('wedge34_hot.glb', gazePivot, 0.09))
 
+  // Eye beam: thin where it leaves the eye, wider where it lands (cylinder bottom = eye end).
   gazeBeam = engine.addEntity()
   Transform.create(gazeBeam, { position: HIDDEN })
-  MeshRenderer.setCylinder(gazeBeam)
+  MeshRenderer.setCylinder(gazeBeam, 0.22, 0.5)
   gazeBeamGlow = engine.addEntity()
   Transform.create(gazeBeamGlow, { position: HIDDEN })
-  MeshRenderer.setCylinder(gazeBeamGlow)
+  MeshRenderer.setCylinder(gazeBeamGlow, 0.18, 0.5)
 
-  // Aftershock: ring of segments repositioned every frame; ivory safe lanes mark the gaps.
-  for (let i = 0; i < SEGMENTS; i++) {
-    const e = engine.addEntity()
-    Transform.create(e, { position: HIDDEN })
-    MeshRenderer.setBox(e)
-    ringSegs.push(e)
-  }
+  // Aftershock: one smooth glowing wave band (two arcs; the gaps are built into the model at
+  // 0 and 180 degrees and the band is turned to the chosen gaps); ivory lanes mark the gaps.
+  ringSegs.push(tele('wave_band.glb'))
   for (let i = 0; i < ATTACKS.aftershock.gapCount; i++) {
     const e = engine.addEntity()
     Transform.create(e, { position: HIDDEN })
@@ -143,6 +131,7 @@ function playerPos() {
 function cancelCurrent() {
   if (!current) return
   current = undefined
+  endVolley()
   endGaze()
   endAftershock()
   endBlindSpot()
@@ -183,6 +172,7 @@ function attackSystem() {
     : current === 'aftershock' ? updateAftershock()
     : current === 'stolen' ? updateCorruption()
     : current === 'blindspot' ? updateBlindSpot()
+    : current === 'volley' ? updateVolley()
     : updateObservation()
   if (finished) {
     current = undefined
@@ -199,6 +189,7 @@ function startAttack(kind: AttackKind) {
   }
   if (kind === 'blindspot') return startBlindSpot()
   if (kind === 'observation') return startObservation()
+  if (kind === 'volley') return startVolley()
   if (kind === 'gaze') {
     gazeFired = false
     gazeStage = 'off'
@@ -221,11 +212,16 @@ function setGazeLook(stage: 'track' | 'lock' | 'fire') {
   gazeStage = stage
   const alpha = stage === 'track' ? 0.18 : stage === 'lock' ? 0.38 : 0.75
   const intensity = stage === 'track' ? 0.8 : stage === 'lock' ? 1.8 : 5
-  gazeParts.forEach((e, i) => {
-    const edge = i >= gazeParts.length - 2
-    // The floor fan stays readable but secondary to the beam itself.
-    glow(e, COLORS.dangerCrimson, (edge ? Math.min(1, alpha + 0.3) : alpha) * 0.7, edge ? intensity * 1.4 : intensity * 0.8)
-  })
+  const R = ATTACKS.gaze.range
+  if (stage === 'track') {
+    show(gazeParts[0], R, 1, R)
+    hide(gazeParts[1])
+  } else {
+    hide(gazeParts[0])
+    show(gazeParts[1], R, 1, R)
+  }
+  void alpha
+  void intensity
   glow(gazeBeam, stage === 'fire' ? '#FFD3DA' : COLORS.dangerCrimson, stage === 'fire' ? 0.95 : 0.8, stage === 'fire' ? 9 : stage === 'lock' ? 5 : 3)
   glow(gazeBeamGlow, COLORS.dangerCrimson, stage === 'fire' ? 0.35 : 0.18, stage === 'fire' ? 5 : 2)
 }
@@ -301,9 +297,7 @@ function endGaze() {
 
 // ---------------------------------------------------------------- Aftershock
 function setRingLook(look: 'warn' | 'wave') {
-  if (ringLook === look) return
   ringLook = look
-  for (const e of ringSegs) glow(e, COLORS.dangerCrimson, look === 'warn' ? 0.45 : 0.85, look === 'warn' ? 1.5 : 3.5)
 }
 
 function updateAftershock(): boolean {
@@ -353,20 +347,10 @@ function updateAftershock(): boolean {
   setRingLook(active.warning ? 'warn' : 'wave')
   const r = active.radius
   const pulse = active.warning ? 0.6 + 0.4 * Math.abs(Math.sin((state.time - active.wave.warnAt) * 9)) : 1
-  const segLen = ((2 * Math.PI * r) / SEGMENTS) * 1.04
-  for (let i = 0; i < SEGMENTS; i++) {
-    const deg = (i + 0.5) * (360 / SEGMENTS)
-    const inGapNow = active.wave.gaps.some((g) => Math.abs(((deg - g + 540) % 360) - 180) <= a.gapDeg / 2)
-    const tr = Transform.getMutable(ringSegs[i])
-    if (inGapNow) {
-      tr.position = HIDDEN
-      continue
-    }
-    const rad = (deg * Math.PI) / 180
-    tr.position = Vector3.create(center.x + Math.sin(rad) * r, 0.22 * pulse, center.z + Math.cos(rad) * r)
-    tr.rotation = Quaternion.fromEulerDegrees(0, deg + 90, 0)
-    tr.scale = Vector3.create(segLen, 0.44 * pulse, a.bandWidth * 0.55)
-  }
+  const band = Transform.getMutable(ringSegs[0])
+  band.position = Vector3.create(center.x, 0.02, center.z)
+  band.rotation = Quaternion.fromEulerDegrees(0, active.wave.gaps[0] ?? 0, 0)
+  band.scale = Vector3.create(r, (active.warning ? 0.5 : 0.85) * pulse, r)
   // Safe lanes: ivory strips along each gap, from the dais to the wall.
   active.wave.gaps.forEach((g, i) => {
     const lane = safeLanes[i]
@@ -383,7 +367,7 @@ function updateAftershock(): boolean {
 }
 
 function hideRing() {
-  for (const e of ringSegs) Transform.getMutable(e).position = HIDDEN
+  for (const e of ringSegs) hide(e)
   for (const e of safeLanes) Transform.getMutable(e).position = HIDDEN
 }
 
@@ -395,26 +379,6 @@ function endAftershock() {
 /** For the HUD: name of the attack currently telegraphed, if any. */
 export function currentAttack(): AttackKind | undefined {
   return current
-}
-
-// ---------------------------------------------------------------- shared floor fans
-const FAN_RAYS = 6
-function buildFan(parent: Entity, coneDeg: number, inner: number, outer: number, out: Entity[]) {
-  const segs = 3
-  const segLen = (outer - inner) / segs
-  for (let i = 0; i < FAN_RAYS; i++) {
-    const deg = -coneDeg / 2 + (coneDeg * (i + 0.5)) / FAN_RAYS
-    const arm = engine.addEntity()
-    Transform.create(arm, { parent, rotation: Quaternion.fromEulerDegrees(0, deg, 0) })
-    for (let k = 0; k < segs; k++) {
-      const far = inner + (k + 1) * segLen
-      const width = 2 * far * Math.tan(((coneDeg / FAN_RAYS) * Math.PI) / 360) * 1.04
-      const e = engine.addEntity()
-      Transform.create(e, { parent: arm, position: Vector3.create(0, 0.075 + i * 0.001, inner + k * segLen + segLen / 2), scale: Vector3.create(width, 0.01, segLen) })
-      MeshRenderer.setBox(e)
-      out.push(e)
-    }
-  }
 }
 
 // ---------------------------------------------------------------- Blind Spot (phase II)
@@ -429,8 +393,7 @@ function ensureBlindSpot() {
   for (let q = 0; q < 4; q++) {
     const pivot = engine.addEntity()
     Transform.create(pivot, { position: HIDDEN, rotation: Quaternion.fromEulerDegrees(0, q * 90, 0) })
-    const parts: Entity[] = []
-    buildFan(pivot, 88, ARENA.daisRadius + 0.3, ARENA.playableRadius, parts)
+    const parts = [tele('wedge88_crimson.glb', pivot), tele('wedge88_ivory.glb', pivot, 0.085), tele('wedge88_gold.glb', pivot, 0.09)]
     quadrants.push({ pivot, parts, look: '' })
   }
 }
@@ -439,10 +402,9 @@ function quadLook(q: number, look: 'danger' | 'safe' | 'blast' | 'blind') {
   const Q = quadrants[q]
   if (Q.look === look) return
   Q.look = look
-  const hex = look === 'safe' ? COLORS.ivory : look === 'blind' ? COLORS.syncGold : COLORS.dangerCrimson
-  const alpha = look === 'blast' ? 0.6 : look === 'safe' ? 0.28 : look === 'blind' ? 0.18 : 0.22
-  const intensity = look === 'blast' ? 4 : 1.4
-  for (const e of Q.parts) glow(e, hex, alpha, intensity)
+  const R = ARENA.playableRadius
+  const which = look === 'safe' ? 1 : look === 'blind' ? 2 : 0
+  Q.parts.forEach((e, k) => (k === which ? show(e, R, look === 'blast' ? 1.6 : 1, R) : hide(e)))
 }
 
 function startBlindSpot() {
@@ -493,18 +455,8 @@ let obsLook = ''
 
 function ensureObservation() {
   if (obsDanger) return
-  obsDanger = engine.addEntity()
-  Transform.create(obsDanger, { position: HIDDEN })
-  MeshRenderer.setCylinder(obsDanger)
-  const f = ATTACKS.finalObservation
-  for (let i = 0; i < 4; i++) {
-    const e = engine.addEntity()
-    Transform.create(e, { position: HIDDEN })
-    MeshRenderer.setCylinder(e)
-    glow(e, COLORS.ivory, 0.45, 2)
-    obsSafe.push(e)
-  }
-  void f
+  obsDanger = tele('disc_crimson.glb')
+  for (let i = 0; i < 4; i++) obsSafe.push(tele('disc_ivory.glb'))
 }
 
 function safeCenters(): { x: number; z: number }[] {
@@ -518,14 +470,14 @@ function startObservation() {
   obsPulsed = false
   obsLook = ''
   const f = ATTACKS.finalObservation
-  const d = ARENA.playableRadius * 2
+  const R = ARENA.playableRadius
   const tr = Transform.getMutable(obsDanger!)
-  tr.position = Vector3.create(center.x, 0.09, center.z)
-  tr.scale = Vector3.create(d, 0.01, d)
+  tr.position = Vector3.create(center.x, 0.08, center.z)
+  tr.scale = Vector3.create(R, 1, R)
   safeCenters().forEach((c, i) => {
     const s = Transform.getMutable(obsSafe[i])
     s.position = Vector3.create(c.x, 0.1, c.z)
-    s.scale = Vector3.create(f.safeRadius * 2, 0.012, f.safeRadius * 2)
+    s.scale = Vector3.create(f.safeRadius, 1, f.safeRadius)
   })
   say('THE FINAL OBSERVATION  ·  stand in a pale circle', f.warning)
 }
@@ -533,7 +485,8 @@ function startObservation() {
 function setObsLook(look: 'warn' | 'blast') {
   if (obsLook === look || !obsDanger) return
   obsLook = look
-  glow(obsDanger, COLORS.dangerCrimson, look === 'warn' ? 0.2 : 0.55, look === 'warn' ? 1.2 : 4)
+  // Blast: the danger floor flares (lifted slightly so it reads as a pulse).
+  Transform.getMutable(obsDanger).position = Vector3.create(center.x, look === 'blast' ? 0.25 : 0.08, center.z)
 }
 
 function updateObservation(): boolean {
@@ -553,8 +506,8 @@ function updateObservation(): boolean {
     say('HIS SIGHT IS OPEN  ·  Convergence from three sides, now!', 3)
   }
   if (t >= f.warning + 0.4) {
-    if (obsDanger) Transform.getMutable(obsDanger).position = HIDDEN
-    for (const e of obsSafe) Transform.getMutable(e).position = HIDDEN
+    if (obsDanger) hide(obsDanger)
+    for (const e of obsSafe) hide(e)
   }
   if (t >= f.warning + f.openWindow + f.rest) {
     endObservation()
@@ -564,6 +517,120 @@ function updateObservation(): boolean {
 }
 
 function endObservation() {
-  if (obsDanger) Transform.getMutable(obsDanger).position = HIDDEN
-  for (const e of obsSafe) Transform.getMutable(e).position = HIDDEN
+  if (obsDanger) hide(obsDanger)
+  for (const e of obsSafe) hide(e)
+}
+
+/** Read-only snapshot of what the floor telegraphs show (for the headless playtest bot in sim/). */
+export function attackDebug() {
+  return {
+    kind: current,
+    startedAt,
+    gazeHeading,
+    gazeStage,
+    waves: waves.map((w) => ({ warnAt: w.warnAt, startAt: w.startAt, gaps: w.gaps, done: w.done })),
+    safeQuadrant,
+    safeCircles: current === 'observation' ? safeCenters() : []
+  }
+}
+
+// ---------------------------------------------------------------- Archive Volley (phases II-III)
+type Bolt = { e: Entity; active: boolean; x: number; z: number; dx: number; dz: number; px: number; pz: number }
+const bolts: Bolt[] = []
+let volleyWarn: Entity | undefined
+let volleyWave = 0
+let volleyHit = false
+
+function ensureVolley() {
+  if (bolts.length) return
+  const v = ATTACKS.volley
+  for (let i = 0; i < v.waves * v.boltsPerWave; i++) {
+    const e = engine.addEntity()
+    Transform.create(e, { position: HIDDEN, scale: Vector3.create(0.42, 0.42, 0.42) })
+    MeshRenderer.setSphere(e)
+    glow(e, '#FF5A72', 1, 5)
+    bolts.push({ e, active: false, x: 0, z: 0, dx: 0, dz: 0, px: 0, pz: 0 })
+  }
+  volleyWarn = tele('disc_crimson.glb')
+}
+
+function startVolley() {
+  ensureVolley()
+  lastVolleyFrame = state.time
+  volleyWave = 0
+  volleyHit = false
+  say('ARCHIVE VOLLEY  ·  slip between the crimson bolts', 2)
+}
+
+function launchWave(w: number) {
+  const v = ATTACKS.volley
+  const p = playerPos()
+  // The first wave is offset so the player is not standing exactly on a line.
+  const base = (p ? headingDeg(sub(p, center)) : 0) + 360 / v.boltsPerWave / 2 + w * v.spinDeg * (w % 2 === 0 ? 1 : -1)
+  for (let i = 0; i < v.boltsPerWave; i++) {
+    const b = bolts[w * v.boltsPerWave + i]
+    const a = ((base + (i * 360) / v.boltsPerWave) * Math.PI) / 180
+    b.active = true
+    b.dx = Math.sin(a)
+    b.dz = Math.cos(a)
+    b.x = center.x + b.dx * (ARENA.daisRadius - 1)
+    b.z = center.z + b.dz * (ARENA.daisRadius - 1)
+    b.px = b.x
+    b.pz = b.z
+  }
+}
+
+function updateVolley(): boolean {
+  const v = ATTACKS.volley
+  const t = state.time - startedAt
+  const dt = Math.min(0.1, state.time - lastVolleyFrame)
+  lastVolleyFrame = state.time
+  // Warning: a pulsing crimson disc under the Watcher as the halos charge.
+  if (volleyWarn) {
+    if (t < v.warning) {
+      const k = (ARENA.daisRadius + 1) * (0.85 + 0.15 * Math.sin(t * 12))
+      const tr = Transform.getMutable(volleyWarn)
+      tr.position = Vector3.create(center.x, 0.09, center.z)
+      tr.scale = Vector3.create(k, 1, k)
+    } else hide(volleyWarn)
+  }
+  while (volleyWave < v.waves && t >= v.warning + volleyWave * v.waveInterval) launchWave(volleyWave++)
+
+  const p = playerPos()
+  let anyActive = false
+  for (const b of bolts) {
+    if (!b.active) continue
+    b.px = b.x
+    b.pz = b.z
+    b.x += b.dx * v.speed * dt
+    b.z += b.dz * v.speed * dt
+    if (Math.hypot(b.x - center.x, b.z - center.z) > ARENA.playableRadius + ARENA.borderMargin) {
+      b.active = false
+      Transform.getMutable(b.e).position = HIDDEN
+      continue
+    }
+    anyActive = true
+    Transform.getMutable(b.e).position = Vector3.create(b.x, v.boltHeight, b.z)
+    if (!volleyHit && p && p.y < v.jumpClear) {
+      const d = pointSegmentDistance(v3(p.x, v.boltHeight, p.z), v3(b.px, v.boltHeight, b.pz), v3(b.x, v.boltHeight, b.z))
+      if (d <= v.hitRadius) {
+        volleyHit = true // one hit per volley
+        damagePlayer(v.damage, 'the Archive Volley')
+      }
+    }
+  }
+  if (volleyWave >= v.waves && !anyActive) {
+    endVolley()
+    return true
+  }
+  return false
+}
+let lastVolleyFrame = 0
+
+function endVolley() {
+  for (const b of bolts) {
+    b.active = false
+    Transform.getMutable(b.e).position = HIDDEN
+  }
+  if (volleyWarn) hide(volleyWarn)
 }

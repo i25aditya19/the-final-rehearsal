@@ -229,3 +229,8 @@ function corruptionVisuals() {
 export function corruptionMode(): Mode {
   return mode
 }
+
+/** Read-only snapshot for the headless playtest bot. */
+export function corruptionDebug() {
+  return { mode, targetId, shotStage, lockedEnd }
+}

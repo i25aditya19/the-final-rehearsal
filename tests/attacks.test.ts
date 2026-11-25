@@ -41,3 +41,13 @@ test('ring wave: jumping clears it, standing in a gap avoids it', () => {
 test('gap layout spreads gaps from an offset', () => {
   assert.deepEqual(gapLayout(350, 2, 40), [30, 210])
 })
+
+import { pointSegmentDistance } from '../src/combat/aim'
+
+test('volley bolt sweep hits a player it passes through, misses one between lines', () => {
+  // bolt moving from (40,1.15,30) to (40,1.15,29.7) this frame
+  const a = v3(40, 1.15, 30)
+  const b = v3(40, 1.15, 29.7)
+  assert.ok(pointSegmentDistance(v3(40, 1.15, 29.8), a, b) <= 0.75)
+  assert.ok(pointSegmentDistance(v3(42, 1.15, 29.8), a, b) > 0.75)
+})

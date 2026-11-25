@@ -174,6 +174,11 @@ export const ATTACKS = {
     gapCount: 2,
     gapDeg: 50
   },
+  /**
+   * Archive Volley (added at the creator's request, phases II-III): the halos fire spiralling
+   * waves of crimson bolts outward in every direction. Slip between the lines (or jump them).
+   */
+  volley: { warning: 1.3, waves: 3, boltsPerWave: 14, waveInterval: 0.75, spinDeg: 9, speed: 9, damage: 8, hitRadius: 0.75, boltHeight: 1.15, jumpClear: 0.9 },
   /** BASELINE warning 2 s; 3 s so the adjacent safe quadrant is reachable on the larger floor. */
   blindSpot: { warning: 3, safeSectorDeg: 90, vulnerability: 5, damage: 15 },
   /** Phase III: warning with safe circles, 20-damage pulse, then the barrier opens. */
