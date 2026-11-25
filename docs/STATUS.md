@@ -12,9 +12,9 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 | M2 | Echoes, repeat timing, Convergence (go/no-go) | **Built, build + 25 unit tests pass; creator playtest pending (go/no-go)** |
 | M3 | Player HP, Gaze, Aftershock, victory/defeat/retry | **Built, build + 32 unit tests pass; creator playtest pending** |
 | M4 | Corruption, Blind Spot, phase gates, final barrier, timeout | **Built, build + 42 unit tests pass; creator playtest pending** |
-| M5 | Real Watcher and chamber assets | Not started |
-| M6 | Telegraph/FX/audio polish, HUD, results, ending | Not started |
-| M7 | Playtests, tuning, licensing check, deploy, submission | Not started |
+| M5 | Real Watcher and chamber assets | **Done** (Aholo models optimized + enclosed chamber) |
+| M6 | Telegraph/FX/audio polish, HUD, results, ending | **Built; creator check of sound/visuals pending** |
+| M7 | Playtests, tuning, licensing check, deploy, submission | **Headless bot playtests running; human playtest, two-visitor test, deploy pending** |
 
 ## M0 record
 
@@ -111,6 +111,16 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Gameplay code untouched (42 tests pass).
 - Budget: about 153k model triangles (limit 250k), assets 6 MB.
 
+## Gameplay polish pass (2026-11-26)
+
+- **Smooth telegraphs** (`assets/telegraphs`, `build_telegraphs.py`): Gaze cone, Blind Spot quadrants, Aftershock wave and Final Observation discs are soft-gradient emissive meshes instead of box fans/segments (creator: "square" look). The Gaze eye beam tapers from the eye to the floor.
+- **Archive Volley** (new attack, creator request "beams going everywhere", phases II-III): 1.3 s charge (pulsing disc, rising hum), then 3 spiralling waves of 14 crimson bolts flying outward in all directions at 9 m/s; slip between the lines; 8 damage once per volley; swept hit test (unit-tested).
+- **Sound** (`assets/audio`, `build_audio.py`): 22 original synthesized cues + chamber and phase-III music loops (OGG, 860 KB, no samples). `src/audio/audio.ts` observes state and plays: cast, echo repeat, runes ready, 2/3/4-way Convergence chords, hits, deflections, hurt, Gaze whisper + crack, Aftershock bell per wave, reversed-chime corruption, Blind Spot swell, Observation choir + boom, Volley hum, phase bell/arpeggio, gate shatter, victory (heartbeat, shatter, resolution), defeat drone; music crossfades into the final theme in phase III and fades at the end. **Not yet heard by a human.**
+- **Living Watcher**: anticipation before every attack (leans in, spectral hands rise and reach, halos spin up), hit jolt + recoil, phase II halos desynchronise and wobble, phase III halos expand and race with abrupt hovering jitter.
+- **Victory cinematic** (about 6.5 s before results): music cuts, surviving echoes turn gold and fire gold beams into him, he freezes, the helm/mask shatters into falling fragments, the three halos swell and burst one after another, hands fade, he sinks and shrinks, the wall silhouettes rise and dissolve, gold motes fill the chamber, the clock races forward; then "TIME MOVES FORWARD AGAIN".
+- Floating damage numbers (gold for Convergence-sized hits) and "DEFLECTED".
+- **Headless playtest** (`npm run sim`): runs the real scene in Node with novice/average/skilled bots. Latest: every run wins; 136-160 s; phase I ends about 25 s, phase II about 52 s; damage taken mostly from the Gaze (novice) and the Volley; Stolen Moment always protected by the bots. Bots know the optimal plan, so these are lower bounds: real first-timers will be slower. **Difficulty deliberately not raised until a human playtest.**
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
@@ -125,4 +135,4 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 
 ## Next step
 
-Creator: full playtest in Chrome and the Desktop Client (whole fight, all phases, corruption, Blind Spot, Final Observation, retry), screenshots of the chamber, FPS and triangle stats. Next: M5/M6 polish: sound and music, mask/halo shattering victory cinematic, phase-transformation effects, attack anticipation animation, tuning from playtest results.
+Creator: one full human playtest (time, deaths, confusion points, sound mix), Desktop Client check, FPS. Then: tuning from that data, two-visitor isolation test, remove debug keys (F, 1), submission page text, trailer shots, deploy to rgl10.dcl.eth (creator signs) by 29 Nov.

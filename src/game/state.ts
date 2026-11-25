@@ -29,6 +29,9 @@ export const state = {
   deflectAt: -10,
   redirects: 0,
   fourWay: 0,
+  /** Attack the Watcher is currently performing (for anticipation animation and sound). */
+  bossCasting: undefined as string | undefined,
+  bossCastAt: 0,
   phaseProgressAt: 0,
   playerHp: PLAYER.maxVitality as number,
   playerImmuneUntil: 0,
@@ -105,6 +108,8 @@ export function resetState() {
   state.deflectAt = -10
   state.redirects = 0
   state.fourWay = 0
+  state.bossCasting = undefined
+  state.bossCastAt = 0
   state.phaseProgressAt = 0
   state.playerHp = PLAYER.maxVitality
   state.playerImmuneUntil = 0

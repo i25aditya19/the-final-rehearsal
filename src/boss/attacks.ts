@@ -129,6 +129,7 @@ function playerPos() {
 }
 
 function cancelCurrent() {
+  state.bossCasting = undefined
   if (!current) return
   current = undefined
   endVolley()
@@ -176,6 +177,7 @@ function attackSystem() {
     : updateObservation()
   if (finished) {
     current = undefined
+    state.bossCasting = undefined
     nextAttackAt = state.time + (state.stage === 'gate' ? ATTACKS.recovery * 1.6 : ATTACKS.recovery)
   }
 }
@@ -183,6 +185,8 @@ function attackSystem() {
 function startAttack(kind: AttackKind) {
   current = kind
   startedAt = state.time
+  state.bossCasting = kind
+  state.bossCastAt = state.time
   if (kind === 'stolen') {
     if (!startCorruption()) current = undefined
     return

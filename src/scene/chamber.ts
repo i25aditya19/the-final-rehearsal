@@ -11,6 +11,7 @@ const CLOCK = 'assets/environment/astro_clock.glb'
 const CLOCK_Y = 25.5
 const CLOCK_SCALE = 15 // 0.6 m model -> 9 m
 let clock: Entity
+let clockAngle = 0
 const CANDLE = 'assets/environment/floating_candle.glb'
 const CANDLE_COUNT = 24
 const CANDLE_SCALE = 2.2 // 0.28 m model -> 0.62 m
@@ -68,7 +69,10 @@ export function initChamber() {
 function chamberSystem() {
   const t = state.time
   // The clock turns slowly so its face sweeps the whole chamber.
-  if (clock) Transform.getMutable(clock).rotation = Quaternion.fromEulerDegrees(0, (t * 4) % 360, 0)
+  // At victory time moves forward again: the clock races.
+  if (state.phase === 'victory') clockAngle += 90 * 0.033
+  else clockAngle += 4 * 0.033
+  if (clock) Transform.getMutable(clock).rotation = Quaternion.fromEulerDegrees(0, clockAngle % 360, 0)
   for (const r of rings) {
     Transform.getMutable(r.e).rotation = Quaternion.multiply(
       Quaternion.fromEulerDegrees(r.tilt * Math.sin(t * 0.1), (t * r.speed) % 360, 0),

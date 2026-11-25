@@ -22,7 +22,7 @@ import { ARENA, BOSS, COLORS, WATCHER_MODEL as M } from '../config'
 import { HitCylinder } from '../combat/aim'
 import { isActive, state } from '../game/state'
 import { onReset } from '../game/session'
-import { attachBossAura } from '../effects/vfx'
+import { attachBossAura, burst } from '../effects/vfx'
 import { V3 } from '../math/vec'
 
 const col4 = (hex: string) => Color4.fromHexString(hex)
@@ -84,7 +84,10 @@ export function createWatcher() {
   else showFallback(true)
 
   engine.addSystem(watcherSystem)
-  onReset(() => setVisage('helm'))
+  onReset(() => {
+    resetLiving()
+    setVisage('helm')
+  })
 }
 
 function createModel() {
@@ -212,9 +215,15 @@ function watcherSystem(dt: number) {
 
   // Idle levitation and a slow, patient sway. On victory he sinks (full cinematic in M6).
   const tr = Transform.getMutable(root)
-  const sink = state.phase === 'victory' ? Math.min(1.6, (t - state.endedAt) * 0.45) : 0
-  tr.position.y = BOSS.hoverHeight + Math.sin(t * 1.1) * 0.14 - sink
-  const frozen = state.phase === 'victory'
+  // Victory: a held, frozen moment, then he sinks as the mask and halos break apart.
+  const te = t - state.endedAt
+  const victory = state.phase === 'victory'
+  const sink = victory ? Math.max(0, Math.min(2.4, (te - 2.2) * 0.7)) : 0
+  const bob = victory && te < 2.2 ? Math.sin(state.endedAt * 1.1) * 0.14 : Math.sin(t * 1.1) * 0.14
+  // Phase III: abrupt, unsettled movement.
+  const jitter = state.bossPhase === 3 && isActive() ? Math.sin(t * 13) * Math.max(0, Math.sin(t * 0.9)) * 0.08 : 0
+  tr.position.y = BOSS.hoverHeight + bob - sink + jitter
+  const frozen = victory
 
   // Glide-turn to face the player.
   if (isActive() && Transform.has(engine.PlayerEntity)) {
@@ -230,28 +239,7 @@ function watcherSystem(dt: number) {
 
   const flashing = t < state.bossFlashUntil
 
-  if (status === 'ready' || status === 'loading') {
-    // Hit reaction: brief recoil (overlapping-silhouette effect comes in M6).
-    const mt = Transform.getMutable(model)
-    const s = M.scale * (flashing ? 0.97 : 1)
-    mt.scale = Vector3.create(flashing ? M.scale * 1.03 : s, s, flashing ? M.scale * 1.03 : s)
-
-    // The Archive: independent rotation in the ring plane plus a slow breathing tilt.
-    halos.forEach((h, i) => {
-      const ht = Transform.getMutable(h.entity)
-      const spin = ((frozen ? state.endedAt : t) * h.speed) % 360
-      ht.rotation = Quaternion.fromEulerDegrees(h.tilt + Math.sin(t * 0.4 + i) * 3, Math.sin(t * 0.3 + i * 2) * 4, spin)
-    })
-
-    // Spectral hands: drift, slow wrist turns and a curling gesture, out of phase with each other.
-    hands.forEach((h, i) => {
-      const ht = Transform.getMutable(h.entity)
-      const ph = t * 0.9 + i * 1.7
-      ht.position = Vector3.create(h.base.x + Math.sin(ph * 0.6) * 0.12, h.base.y + Math.sin(ph) * 0.22, h.base.z + Math.cos(ph * 0.5) * 0.1)
-      const gesture = Math.sin(t * 0.55 + i * 2.4)
-      ht.rotation = Quaternion.fromEulerDegrees(-10 + gesture * 14, h.side * (20 + gesture * 10), h.side * (-12 + Math.sin(ph * 0.8) * 8))
-    })
-  }
+  if (status === 'ready' || status === 'loading') animateModel(t, dt, flashing, frozen)
 
   if (status !== 'ready') {
     for (const r of fallbackRings) {
@@ -263,4 +251,131 @@ function watcherSystem(dt: number) {
       if (m && m.material?.$case === 'pbr') m.material.pbr.emissiveIntensity = flashing ? 8 : 3
     }
   }
+}
+
+// ---------------------------------------------------------------- living animation
+const haloAngle = [0, 0, 0]
+const haloBase: number[] = []
+const shards: { e: Entity; vx: number; vy: number; vz: number; spin: number }[] = []
+let shattered = false
+let jolt = 0
+
+/** Smooth 0..1 anticipation while the Watcher winds up an attack (its warning window). */
+function anticipation(t: number): number {
+  if (!state.bossCasting || !isActive()) return 0
+  const since = t - state.bossCastAt
+  const rise = Math.min(1, since / 0.5)
+  const fall = since > 1.6 ? Math.max(0, 1 - (since - 1.6) / 0.6) : 1
+  return rise * fall
+}
+
+function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean) {
+  const a = anticipation(t)
+  const phase = state.bossPhase
+  const te = t - state.endedAt
+
+  // Hit reaction: recoil plus a sideways jolt (the "overlapping silhouettes" flicker).
+  if (flashing) jolt = (Math.random() < 0.5 ? -1 : 1) * 0.18
+  jolt *= Math.max(0, 1 - dt * 12)
+  const mt = Transform.getMutable(model)
+  const victoryShrink = frozen ? Math.max(0, 1 - Math.max(0, te - 3.0) / 2.5) : 1
+  const s = M.scale * victoryShrink * (flashing ? 0.97 : 1)
+  mt.scale = Vector3.create(flashing ? s * 1.06 : s, s, flashing ? s * 1.06 : s)
+  mt.position = Vector3.create(jolt, 0, -a * 0.25)
+  // Lean in toward the player while winding up.
+  mt.rotation = Quaternion.fromEulerDegrees(a * 8, 0, jolt * 10)
+
+  // The Archive. Phase II: rings fall out of sync. Phase III: they expand and race.
+  // Winding up an attack spins them faster. Victory: they freeze, then burst apart.
+  halos.forEach((h, i) => {
+    const ht = Transform.getMutable(h.entity)
+    if (haloBase[i] === undefined) haloBase[i] = ht.scale.x
+    let speed = h.speed * (1 + 2.5 * a)
+    if (phase === 2) speed *= 1 + 0.6 * Math.sin(t * (0.7 + i * 0.4) + i)
+    if (phase === 3) speed *= 1.8
+    if (!frozen) haloAngle[i] = (haloAngle[i] + speed * dt) % 360
+    const wobble = phase >= 2 ? 6 + 4 * phase : 3
+    ht.rotation = Quaternion.fromEulerDegrees(h.tilt + Math.sin(t * 0.4 + i) * wobble, Math.sin(t * 0.3 + i * 2) * (wobble + 1), haloAngle[i])
+    let k = haloBase[i] * (phase === 3 ? 1.2 : 1)
+    if (frozen && te > 1.6) {
+      // break: swell outward then vanish, one ring after another
+      const p = Math.min(1, Math.max(0, (te - 1.6 - i * 0.18) / 0.9))
+      k = p >= 1 ? 0 : haloBase[i] * (1.2 + 1.4 * p)
+    }
+    ht.scale = Vector3.create(k, k, k)
+  })
+
+  // Spectral hands: drift and curl; rise and reach forward when he winds up an attack.
+  hands.forEach((h, i) => {
+    const ht = Transform.getMutable(h.entity)
+    const ph = t * (phase >= 2 ? 1.3 : 0.9) + i * 1.7
+    const victoryFade = frozen ? Math.max(0, 1 - Math.max(0, te - 2.0) / 1.2) : 1
+    ht.position = Vector3.create(
+      h.base.x * (1 - 0.25 * a) + Math.sin(ph * 0.6) * 0.12,
+      h.base.y + 1.3 * a + Math.sin(ph) * 0.22,
+      h.base.z + 0.9 * a + Math.cos(ph * 0.5) * 0.1
+    )
+    const gesture = Math.sin(t * 0.55 + i * 2.4)
+    ht.rotation = Quaternion.fromEulerDegrees(-10 + gesture * 14 - 55 * a, h.side * (20 + gesture * 10), h.side * (-12 + Math.sin(ph * 0.8) * 8))
+    const hs = M.handScale * victoryFade
+    ht.scale = Vector3.create(h.side < 0 ? -hs : hs, hs, hs)
+  })
+
+  // Victory: the helm or mask shatters into fragments that fall away.
+  if (frozen && te > 1.6 && !shattered) shatter()
+  if (shards.length && shattered) {
+    for (const sh of shards) {
+      const st = Transform.getMutable(sh.e)
+      sh.vy -= 9.8 * 0.35 * dt
+      st.position = Vector3.create(st.position.x + sh.vx * dt, Math.max(0.05, st.position.y + sh.vy * dt), st.position.z + sh.vz * dt)
+      st.rotation = Quaternion.multiply(st.rotation, Quaternion.fromEulerDegrees(sh.spin * dt, sh.spin * 0.7 * dt, 0))
+      const fadeK = Math.max(0, 1 - Math.max(0, te - 4.5) / 1.5)
+      st.scale = Vector3.create(0.32 * fadeK, 0.06 * fadeK, 0.5 * fadeK)
+    }
+  }
+}
+
+function shatter() {
+  shattered = true
+  Transform.getMutable(helm).scale = HIDDEN_SCALE
+  Transform.getMutable(mask).scale = HIDDEN_SCALE
+  const head = Vector3.add(Transform.get(root).position, Vector3.create(0, M.head.y * M.scale, 0.3))
+  if (!shards.length) {
+    for (let i = 0; i < 14; i++) {
+      const e = engine.addEntity()
+      Transform.create(e, { position: head })
+      MeshRenderer.setSphere(e)
+      Material.setPbrMaterial(e, {
+        albedoColor: Color4.fromHexString(visage === 'mask' || i % 3 ? COLORS.ivory : COLORS.charcoal),
+        emissiveColor: col3(COLORS.syncGold),
+        emissiveIntensity: 0.6,
+        roughness: 0.5
+      })
+      shards.push({ e, vx: 0, vy: 0, vz: 0, spin: 0 })
+    }
+  }
+  shards.forEach((sh, i) => {
+    const a = (i / shards.length) * Math.PI * 2
+    sh.vx = Math.cos(a) * (2 + Math.random() * 2.5)
+    sh.vz = Math.sin(a) * (2 + Math.random() * 2.5) + 1
+    sh.vy = 2 + Math.random() * 3
+    sh.spin = 200 + Math.random() * 300
+    const st = Transform.getMutable(sh.e)
+    st.position = head
+    st.scale = Vector3.create(0.32, 0.06, 0.5)
+  })
+  burst({ x: head.x, y: head.y, z: head.z }, COLORS.finalWhite, 2.2)
+}
+
+function resetLiving() {
+  shattered = false
+  jolt = 0
+  for (const sh of shards) {
+    const st = Transform.getMutable(sh.e)
+    st.position = Vector3.create(0, -40, 0)
+    st.scale = Vector3.Zero()
+  }
+  halos.forEach((h, i) => {
+    if (haloBase[i] !== undefined) Transform.getMutable(h.entity).scale = Vector3.create(haloBase[i], haloBase[i], haloBase[i])
+  })
 }

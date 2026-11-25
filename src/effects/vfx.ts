@@ -35,6 +35,7 @@ let impactUntil = 0
 
 // ------------------------------------------------------------------ gaze sparks
 let sparks: Entity
+let motes: Entity
 
 export function initVfx() {
   for (let i = 0; i < TRAILS; i++) {
@@ -90,7 +91,7 @@ export function initVfx() {
   })
 
   // Faint silver motes drifting through the chamber (atmosphere; colour stays neutral).
-  const motes = engine.addEntity()
+  motes = engine.addEntity()
   Transform.create(motes, { position: Vector3.create(ARENA.center.x, 4, ARENA.center.z) })
   ParticleSystem.create(motes, {
     rate: 18,
@@ -112,6 +113,16 @@ export function initVfx() {
     for (const t of trails) releaseTrail(t.owner)
     stopSparks()
   })
+}
+
+/** Victory: the chamber fills with warm gold motes (and back to silver on retry). */
+export function setVictoryMotes(on: boolean) {
+  if (!motes) return
+  const ps = ParticleSystem.getMutable(motes)
+  ps.rate = on ? 60 : 18
+  ps.initialColor = on ? { start: hexA('#D8B76B', 0.9), end: hexA('#F1EFEA', 0.7) } : { start: hexA('#D4D4D4', 0.5), end: hexA('#969696', 0.35) }
+  ps.colorOverTime = on ? { start: hexA('#D8B76B', 0.85), end: hexA('#D8B76B', 0) } : { start: hexA('#F1EFEA', 0.45), end: hexA('#969696', 0) }
+  ps.initialSize = on ? { start: 0.12, end: 0.28 } : { start: 0.06, end: 0.14 }
 }
 
 /** Shadow wisps rising off the Watcher's robes (parented to the boss root). */

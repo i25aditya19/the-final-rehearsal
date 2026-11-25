@@ -89,7 +89,7 @@ function echoViewSystem() {
     const ready = !e.corrupted && ttf <= CONVERGENCE.readyWindow
     const justFired = state.time - e.lastFired < 0.25
 
-    const look: Look = e.corrupted ? 'corrupt' : justFired ? 'fired' : ready ? 'ready' : 'idle'
+    const look: Look = state.phase === 'victory' ? 'ready' : e.corrupted ? 'corrupt' : justFired ? 'fired' : ready ? 'ready' : 'idle'
     if (look !== v.look) {
       const hex = look === 'corrupt' ? COLORS.dangerCrimson : look === 'ready' ? COLORS.syncGold : COLORS.echoCyan
       const glow = look === 'fired' ? 4 : look === 'ready' ? 2.2 : 1.2

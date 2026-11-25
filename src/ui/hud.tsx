@@ -125,7 +125,7 @@ function Subtitle() {
 function Results() {
   const won = state.phase === 'victory'
   const since = state.time - state.endedAt
-  if (since < 1.2) return null
+  if (since < (state.phase === 'victory' ? 6.5 : 1.2)) return null
   const t = state.endedAt
   const reason = state.endReason === 'time' ? 'Time ran out.' : state.endReason === 'health' ? `Your vitality was exhausted${state.lastHitBy ? ` (${state.lastHitBy})` : ''}.` : ''
   const tip = state.convergences === 0

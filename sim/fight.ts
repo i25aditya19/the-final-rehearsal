@@ -46,6 +46,7 @@ async function runOne(p: Profile, seed: number): Promise<Result> {
   let seenKind: string | undefined
   const phaseTimes: number[] = []
   let lastPhase = 1
+  const corr = { started: 0, corrupted: 0, prev: 'idle' }
   const spots = [0, 90, 180, 270].map((h) => ({ h, x: C.x + Math.sin(rad(h)) * 11, z: C.z + Math.cos(rad(h)) * 11 }))
   let spotIdx = 2 // start south
 
@@ -159,6 +160,12 @@ async function runOne(p: Profile, seed: number): Promise<Result> {
     if (t >= state.convergenceReadyAt && ready.length >= need && sectors >= wantSectors && windowOk) press(InputAction.IA_PRIMARY)
 
     await engine.update(DT)
+    const cm = corruptionDebug().mode
+    if (cm !== corr.prev) {
+      if (cm === 'warning') corr.started++
+      if (cm === 'corrupted') corr.corrupted++
+      corr.prev = cm
+    }
 
     if (state.playerHp < lastHp) {
       hits[state.lastHitBy] = (hits[state.lastHitBy] ?? 0) + (lastHp - state.playerHp)
@@ -171,8 +178,7 @@ async function runOne(p: Profile, seed: number): Promise<Result> {
   }
   return {
     profile: p.name, seed, outcome: state.phase === 'active' ? 'timeout(sim)' : state.endReason ?? state.phase, time: Math.round(state.endedAt || state.time),
-    phase: state.bossPhase, hits, conv: state.convergences, fourWay: state.fourWay, redirects: state.redirects, grade: state.score?.grade, phaseTimes
-  }
+    phase: state.bossPhase, hits, conv: state.convergences, fourWay: state.fourWay, redirects: state.redirects, grade: state.score?.grade, phaseTimes, corruption: `${corr.corrupted}/${corr.started}` } as any
 }
 
 async function run() {
@@ -197,7 +203,6 @@ async function run() {
   }
   void IMPRINT
   void CORRUPTION
-  void corruptionDebug
 }
 run().catch((e) => {
   console.error(e)
