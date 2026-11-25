@@ -22,6 +22,8 @@ import { ARENA, BOSS, COLORS, WATCHER_MODEL as M } from '../config'
 import { HitCylinder } from '../combat/aim'
 import { isActive, state } from '../game/state'
 import { onReset } from '../game/session'
+import { attachBossAura } from '../effects/vfx'
+import { V3 } from '../math/vec'
 
 const col4 = (hex: string) => Color4.fromHexString(hex)
 const col3 = (hex: string) => {
@@ -76,6 +78,7 @@ export function createWatcher() {
   root = engine.addEntity()
   Transform.create(root, { position: Vector3.create(ARENA.center.x, BOSS.hoverHeight, ARENA.center.z) })
 
+  attachBossAura(root)
   createFallback()
   if (M.enabled) createModel()
   else showFallback(true)
@@ -145,6 +148,15 @@ function createFallback() {
 
 function showFallback(show: boolean) {
   Transform.getMutable(fallback).scale = show ? Vector3.One() : HIDDEN_SCALE
+}
+
+/** World position of the Watcher's eye (helm slit / mask eye), for beams that leave from it. */
+export function watcherEyePosition(): V3 {
+  const tr = Transform.get(root)
+  const s = M.scale
+  const local = Vector3.create(0, 1.63 * s, 0.3 * s)
+  const w = Vector3.rotate(local, tr.rotation)
+  return { x: tr.position.x + w.x, y: tr.position.y + w.y, z: tr.position.z + w.z }
 }
 
 /** Swap the helm for the ivory mask (final transformation) or back. */

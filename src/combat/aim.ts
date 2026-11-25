@@ -64,6 +64,7 @@ export type ShotInput = {
   target: HitCylinder
   range: number
   aimAssistDeg: number
+  bounds?: { center: V3; wallRadius: number }
 }
 
 export type ShotResult = {
@@ -101,15 +102,16 @@ export function computeShot(input: ShotInput): ShotResult {
     }
   }
 
-  return resolveShot(input.castOrigin, dir, input.target, input.range, assisted)
+  return resolveShot(input.castOrigin, dir, input.target, input.range, assisted, input.bounds)
 }
 
 /** Trace a fixed-direction spell (direct cast or echo repeat) against the target. */
-export function resolveShot(origin: V3, dir: V3, target: HitCylinder, range: number, assisted = false): ShotResult {
+export function resolveShot(origin: V3, dir: V3, target: HitCylinder, range: number, assisted = false, bounds?: { center: V3; wallRadius: number }): ShotResult {
   const d = norm(dir)
   const t = segmentCylinderT(origin, d, target, range)
   if (t !== null) return { dir: d, hit: true, end: add(origin, scale(d, t)), distance: t, assisted }
-  return { dir: d, hit: false, end: add(origin, scale(d, range)), distance: range, assisted }
+  const stop = bounds ? stopDistance(origin, d, bounds.center, bounds.wallRadius, range) : range
+  return { dir: d, hit: false, end: add(origin, scale(d, stop)), distance: stop, assisted }
 }
 
 /**
@@ -124,4 +126,26 @@ export function sectorOf(pos: V3, center: V3, sectorCount: number, hysteresisDeg
   if (previous === undefined || previous === raw || hysteresisDeg <= 0) return raw
   const prevCenter = previous * width
   return headingDiffDeg(h, prevCenter) <= width / 2 + hysteresisDeg ? previous : raw
+}
+
+/**
+ * Distance along `dir` (normalized) at which a missed spell stops: the arena wall (circle of
+ * `wallRadius` around `center` on the floor plane), the floor (y = 0) or `range`, whichever first.
+ */
+export function stopDistance(origin: V3, dir: V3, center: V3, wallRadius: number, range: number): number {
+  let best = range
+  const ox = origin.x - center.x
+  const oz = origin.z - center.z
+  const a = dir.x * dir.x + dir.z * dir.z
+  if (a > 1e-12) {
+    const b = 2 * (ox * dir.x + oz * dir.z)
+    const c = ox * ox + oz * oz - wallRadius * wallRadius
+    const disc = b * b - 4 * a * c
+    if (disc >= 0) {
+      const t = (-b + Math.sqrt(disc)) / (2 * a)
+      if (t > 0) best = Math.min(best, t)
+    }
+  }
+  if (dir.y < -1e-6) best = Math.min(best, -origin.y / dir.y)
+  return Math.max(0, best)
 }

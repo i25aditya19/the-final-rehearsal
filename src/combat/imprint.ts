@@ -6,10 +6,12 @@ import { isMobile } from '@dcl/sdk/platform'
 import { ARENA, BOSS, COLORS, IMPRINT, UI } from '../config'
 import { computeShot, sectorOf } from './aim'
 import { bossHitVolume } from '../boss/watcher'
-import { spawnTracer } from '../effects/tracers'
+import { launch } from '../effects/projectiles'
 import { damageBoss, isActive, state } from '../game/state'
 import { leaveEcho } from '../echoes/echoSystem'
 import { v3 } from '../math/vec'
+
+const ARENA_BOUNDS = { center: ARENA.center, wallRadius: ARENA.playableRadius + ARENA.borderMargin }
 
 let lockRequestedAt = -1
 let lockRequestIgnored = false
@@ -61,20 +63,22 @@ function imprintSystem() {
     cameraDir: camDir,
     target: bossHitVolume(),
     range: IMPRINT.range,
-    aimAssistDeg: IMPRINT.aimAssistDeg
+    aimAssistDeg: IMPRINT.aimAssistDeg,
+    bounds: ARENA_BOUNDS
   })
 
   state.imprintReadyAt = state.time + IMPRINT.cooldown
   state.shots++
-  spawnTracer(castOrigin, shot.end, COLORS.echoCyan, shot.hit)
-
-  if (shot.hit) {
-    const dmg = damageBoss(IMPRINT.directDamage)
-    state.hits++
-    state.lastShot = { kind: 'hit', damage: dmg, assisted: shot.assisted, at: state.time }
-  } else {
-    state.lastShot = { kind: 'miss', damage: 0, assisted: false, at: state.time }
-  }
+  const assisted = shot.assisted
+  launch(castOrigin, shot.end, COLORS.echoCyan, shot.hit, () => {
+    if (shot.hit) {
+      const dmg = damageBoss(IMPRINT.directDamage)
+      state.hits++
+      state.lastShot = { kind: 'hit', damage: dmg, assisted, at: state.time }
+    } else {
+      state.lastShot = { kind: 'miss', damage: 0, assisted: false, at: state.time }
+    }
+  })
 
   // Every cast leaves an echo where the caster stood, remembering this exact direction.
   leaveEcho(v3(player.x, player.y, player.z), castOrigin, shot.dir)

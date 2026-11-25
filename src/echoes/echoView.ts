@@ -54,12 +54,12 @@ export function createEchoViews() {
     Transform.create(body, { parent: root, position: Vector3.create(0, 0.85, 0), scale: Vector3.create(0.9, 1.7, 0.9) })
     MeshRenderer.setCylinder(body, 0.5, 0.18)
     const hood = engine.addEntity()
-    Transform.create(hood, { parent: root, position: Vector3.create(0, 1.85, 0.02), scale: Vector3.create(0.42, 0.5, 0.42), rotation: Quaternion.fromEulerDegrees(0, 45, 0) })
-    MeshRenderer.setBox(hood)
+    Transform.create(hood, { parent: root, position: Vector3.create(0, 1.85, 0.02), scale: Vector3.create(0.42, 0.52, 0.44) })
+    MeshRenderer.setSphere(hood)
     // Casting arm pointing along the remembered direction.
     const arm = engine.addEntity()
-    Transform.create(arm, { parent: root, position: Vector3.create(0.22, 1.35, 0.32), scale: Vector3.create(0.1, 0.1, 0.6) })
-    MeshRenderer.setBox(arm)
+    Transform.create(arm, { parent: root, position: Vector3.create(0.22, 1.35, 0.32), scale: Vector3.create(0.1, 0.6, 0.1), rotation: Quaternion.fromEulerDegrees(90, 0, 0) })
+    MeshRenderer.setCylinder(arm, 0.5, 0.3)
     ghostMaterial(arm, COLORS.echoCyan, 0.55, 1.5)
 
     views.push({ root, body, hood, fill, look: '', fillLook: '' })

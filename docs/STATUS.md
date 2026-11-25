@@ -68,9 +68,23 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Victory placeholder: halos freeze, Watcher sinks; full gameplay-driven cinematic is M6.
 - Phases, gates, corruption, Blind Spot, Final Observation: M4. No audio yet (M6).
 
-## Scene budget (9 parcels)
+## Feedback round 1 (2026-11-25): bigger arena, real projectiles, eye beam
 
-90,000 triangles · 1,800 entities · 66 materials · 33 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
+- **Arena 5x5 parcels (80x80 m)**: playable radius 20 m (was 12), wall at 23 m (48 segments, 3 m high, silver coping), 12 pillars 14 m tall with bases, capitals and candles, dais 4.5 m. Spawn moved south (z 22-24). Scene limits now 250k tris / 5,000 entities.
+- Watcher scaled to 1.65 (about 6.6 m), hit volume r 2.1 m x 7.2 m; halos 1.9/2.7/3.5 m; hands 2.0 scale.
+- **Spells are flying projectiles** (34 m/s): white-hot core, coloured halo, tapered streak, particle trail; damage applied on arrival with an impact burst. Misses stop at the wall or floor with a small fizzle (`stopDistance`, tested). Echo repeats use the same projectiles, slightly smaller.
+- **Convergence**: round gold beams (cylinders) with gold impact bursts; golden floor links.
+- **The Gaze is now a beam from the Watcher's eye**: thin shimmering crimson aiming ray while tracking, brighter when locked, then a thick blast that sweeps across the whole cone with crimson sparks where it meets the floor. The floor fan stays as the readable warning. Range 24 m, 34° wide, 1.5 s warning (0.8 s locked).
+- Aftershock: 64 segments, scaled for the larger floor (starts at 4.6 m, 10 m/s).
+- Particles (exactly 8 emitters, max 710 particles): 4 spell trails, 1 impact, 1 Gaze sparks, 1 Watcher shadow aura, 1 ambient silver motes. Soft round sprites `assets/images/glow.png`, `spark.png` (no square particles).
+- Atmosphere: fixed dusk (19:30) via scene.json and runtime SkyboxTime; 4 silver point lights + 1 crimson under-light (5 of 8 mobile budget).
+- Echo ghosts: sphere hood and round casting arm.
+- **Watcher models still not in git**: committing them needs the creator's explicit confirmation that Aholo's terms allow public redistribution (the repo is public). Until then they must be unzipped locally into `assets/boss/`.
+- Unverified in client: lighting intensity, particle look/budget behaviour, beam orientation (cylinder axis fix), dusk readability.
+
+## Scene budget (25 parcels)
+
+250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
 
 ## Open risks
 

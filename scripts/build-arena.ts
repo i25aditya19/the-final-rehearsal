@@ -139,20 +139,20 @@ for (const r of [R * 0.75, R * 0.5]) {
   disc(`Ring ${r.toFixed(1)} line`, r + 0.06, LINE, 0.15)
   disc(`Ring ${r.toFixed(1)}`, r, FLOOR_BASE)
 }
-disc('Dais line', 3.3, LINE, 0.25)
-disc('Dais', 3.2, COLORS.charcoal)
+disc('Dais line', ARENA.daisRadius + 0.12, LINE, 0.25)
+disc('Dais', ARENA.daisRadius, COLORS.charcoal)
 
 // Sector boundaries on the diagonals (sectors are centred on N/E/S/W).
-const lineLen = R - 3.2
+const lineLen = R - ARENA.daisRadius
 for (let i = 0; i < ARENA.sectorCount; i++) {
   const deg = 45 + i * (360 / ARENA.sectorCount)
-  const mid = 3.2 + lineLen / 2
+  const mid = ARENA.daisRadius + lineLen / 2
   const rad = (deg * Math.PI) / 180
   make({
     name: `${PREFIX}/Sector boundary ${i}`,
     mesh: 'box',
     pos: [Math.sin(rad) * mid, y + 0.002, Math.cos(rad) * mid],
-    scale: [0.09, 0.01, lineLen],
+    scale: [0.12, 0.01, lineLen],
     rotY: deg,
     color: LINE,
     emissive: 0.2,
@@ -171,7 +171,7 @@ for (let i = 0; i < ARENA.sectorCount; i++) {
     name: `${PREFIX}/Rune ${sectorNames[i] ?? i}`,
     mesh: 'box',
     pos: [Math.sin(rad) * r, y + 0.002, Math.cos(rad) * r],
-    scale: [0.7, 0.01, 0.7],
+    scale: [1.1, 0.01, 1.1],
     rotY: deg + 45,
     color: COLORS.ivory,
     emissive: 0.35,
@@ -180,7 +180,7 @@ for (let i = 0; i < ARENA.sectorCount; i++) {
 }
 
 // Boundary wall: polygon of solid segments just outside the playable floor.
-const segments = 24
+const segments = 48
 const segLen = 2 * wallR * Math.tan(Math.PI / segments) + 0.1
 for (let i = 0; i < segments; i++) {
   const deg = (i + 0.5) * (360 / segments)
@@ -188,8 +188,8 @@ for (let i = 0; i < segments; i++) {
   make({
     name: `${PREFIX}/Wall ${i}`,
     mesh: 'box',
-    pos: [Math.sin(rad) * wallR, 1.2, Math.cos(rad) * wallR],
-    scale: [segLen, 2.4, 0.5],
+    pos: [Math.sin(rad) * wallR, 1.5, Math.cos(rad) * wallR],
+    scale: [segLen, 3, 0.7],
     rotY: deg,
     color: COLORS.stone,
     collider: 2,
@@ -197,20 +197,38 @@ for (let i = 0; i < segments; i++) {
   })
 }
 
-// Pillars: tall columns just behind the wall (placeholder for gothic arches in M5).
-for (let i = 0; i < 8; i++) {
-  const deg = i * 45 + 22.5
+// Wall coping: a thin silver line along the top of the wall (reads the boundary at dusk).
+for (let i = 0; i < segments; i++) {
+  const deg = (i + 0.5) * (360 / segments)
   const rad = (deg * Math.PI) / 180
-  const r = wallR + 0.9
   make({
-    name: `${PREFIX}/Pillar ${i}`,
-    mesh: 'cylinder',
-    pos: [Math.sin(rad) * r, 4, Math.cos(rad) * r],
-    scale: [1.1, 8, 1.1],
-    color: COLORS.charcoal,
-    collider: 2,
+    name: `${PREFIX}/Coping ${i}`,
+    mesh: 'box',
+    pos: [Math.sin(rad) * wallR, 3.05, Math.cos(rad) * wallR],
+    scale: [segLen, 0.12, 0.8],
+    rotY: deg,
+    color: COLORS.silver,
+    emissive: 0.25,
     parent: root
   })
+}
+
+// Pillars: tall columns behind the wall with a capital and a candle flame (gothic placeholder
+// until the modular chamber kit; see GAME_DESIGN 13).
+const pillarCount = 12
+for (let i = 0; i < pillarCount; i++) {
+  const deg = i * (360 / pillarCount) + 15
+  const rad = (deg * Math.PI) / 180
+  const r = wallR + 1.6
+  const x = Math.sin(rad) * r
+  const z = Math.cos(rad) * r
+  make({ name: `${PREFIX}/Pillar ${i}`, mesh: 'cylinder', pos: [x, 7, z], scale: [1.6, 14, 1.6], color: COLORS.charcoal, collider: 2, parent: root })
+  make({ name: `${PREFIX}/Pillar base ${i}`, mesh: 'cylinder', pos: [x, 0.4, z], scale: [2.3, 0.8, 2.3], color: COLORS.stone, parent: root })
+  make({ name: `${PREFIX}/Pillar capital ${i}`, mesh: 'cylinder', pos: [x, 14.2, z], scale: [2.3, 0.5, 2.3], color: COLORS.stone, parent: root })
+  // Candle on a bracket facing the arena.
+  const cr = r - 1.25
+  make({ name: `${PREFIX}/Candle ${i}`, mesh: 'cylinder', pos: [Math.sin(rad) * cr, 4.2, Math.cos(rad) * cr], scale: [0.22, 0.7, 0.22], color: COLORS.ivory, parent: root })
+  make({ name: `${PREFIX}/Candle flame ${i}`, mesh: 'cylinder', pos: [Math.sin(rad) * cr, 4.7, Math.cos(rad) * cr], scale: [0.1, 0.25, 0.1], color: '#FFE2B0', emissive: 4, parent: root })
 }
 
 writeFileSync(COMPOSITE, JSON.stringify(composite, null, 2) + '\n')

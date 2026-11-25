@@ -11,6 +11,9 @@ import { state } from './game/state'
 import { setupHud } from './ui/hud'
 import { initSession } from './game/session'
 import { initAttacks } from './boss/attacks'
+import { initVfx } from './effects/vfx'
+import { initProjectiles } from './effects/projectiles'
+import { initAtmosphere } from './scene/atmosphere'
 
 /** Single session clock. Runs first each frame; large hitches are clamped. */
 function clockSystem(dt: number) {
@@ -20,12 +23,15 @@ function clockSystem(dt: number) {
 export function main() {
   engine.addSystem(clockSystem, 200000, "clock") // higher priority runs first (regular = 100000)
   initSession()
+  initAtmosphere()
+  initVfx()
   createWatcher()
   createTracerPool()
+  initProjectiles()
   initImprint()
   initEchoes()
   createEchoViews()
   initAttacks()
   setupHud()
-  console.log('[FinalRehearsal] M3 loaded')
+  console.log('[FinalRehearsal] M3.5 loaded (bigger arena, projectiles, eye beam)')
 }

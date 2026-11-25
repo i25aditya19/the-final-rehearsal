@@ -7,6 +7,8 @@ import { ARENA, ATTACKS, COLORS } from '../config'
 import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
 import { headingDeg, sub, v3 } from '../math/vec'
 import { damagePlayer, isActive, state } from '../game/state'
+import { watcherEyePosition } from './watcher'
+import { setSparks } from '../effects/vfx'
 import { onReset } from '../game/session'
 
 type AttackKind = 'gaze' | 'aftershock'
@@ -27,9 +29,13 @@ const gazeParts: Entity[] = []
 let gazeHeading = 0
 let gazeStage: 'off' | 'track' | 'lock' | 'fire' = 'off'
 let gazeFired = false
+/** The real beam from the eye: a thin aiming ray while tracking, a sweeping blast on fire. */
+let gazeBeam: Entity
+let gazeBeamGlow: Entity
+const AXIS_FIX = Quaternion.fromEulerDegrees(90, 0, 0)
 
 // ---------------------------------------------------------------- Aftershock state + visuals
-const SEGMENTS = 40
+const SEGMENTS = 64
 const ringSegs: Entity[] = []
 const safeLanes: Entity[] = []
 let ringLook = ''
@@ -83,6 +89,13 @@ export function initAttacks() {
     MeshRenderer.setBox(e)
     gazeParts.push(e)
   }
+
+  gazeBeam = engine.addEntity()
+  Transform.create(gazeBeam, { position: HIDDEN })
+  MeshRenderer.setCylinder(gazeBeam)
+  gazeBeamGlow = engine.addEntity()
+  Transform.create(gazeBeamGlow, { position: HIDDEN })
+  MeshRenderer.setCylinder(gazeBeamGlow)
 
   // Aftershock: ring of segments repositioned every frame; ivory safe lanes mark the gaps.
   for (let i = 0; i < SEGMENTS; i++) {
@@ -162,8 +175,33 @@ function setGazeLook(stage: 'track' | 'lock' | 'fire') {
   const intensity = stage === 'track' ? 0.8 : stage === 'lock' ? 1.8 : 5
   gazeParts.forEach((e, i) => {
     const edge = i >= gazeParts.length - 2
-    glow(e, COLORS.dangerCrimson, edge ? Math.min(1, alpha + 0.4) : alpha, edge ? intensity * 1.6 : intensity)
+    // The floor fan stays readable but secondary to the beam itself.
+    glow(e, COLORS.dangerCrimson, (edge ? Math.min(1, alpha + 0.3) : alpha) * 0.7, edge ? intensity * 1.4 : intensity * 0.8)
   })
+  glow(gazeBeam, stage === 'fire' ? '#FFD3DA' : COLORS.dangerCrimson, stage === 'fire' ? 0.95 : 0.8, stage === 'fire' ? 9 : stage === 'lock' ? 5 : 3)
+  glow(gazeBeamGlow, COLORS.dangerCrimson, stage === 'fire' ? 0.35 : 0.18, stage === 'fire' ? 5 : 2)
+}
+
+/** Point the eye beam along a heading, down to the floor at the cone's reach. */
+function aimBeam(heading: number, width: number) {
+  const eye = watcherEyePosition()
+  const g = ATTACKS.gaze
+  const rad = (heading * Math.PI) / 180
+  const reach = g.range * 0.92
+  const end = Vector3.create(center.x + Math.sin(rad) * reach, 0.05, center.z + Math.cos(rad) * reach)
+  const dir = Vector3.subtract(end, Vector3.create(eye.x, eye.y, eye.z))
+  const len = Vector3.length(dir)
+  const rot = Quaternion.multiply(Quaternion.lookRotation(Vector3.normalize(dir)), AXIS_FIX)
+  const mid = Vector3.lerp(Vector3.create(eye.x, eye.y, eye.z), end, 0.5)
+  const b = Transform.getMutable(gazeBeam)
+  b.position = mid
+  b.rotation = rot
+  b.scale = Vector3.create(width, len, width)
+  const gl = Transform.getMutable(gazeBeamGlow)
+  gl.position = mid
+  gl.rotation = rot
+  gl.scale = Vector3.create(width * 3.2, len, width * 3.2)
+  return end
 }
 
 function updateGaze(): boolean {
@@ -180,14 +218,21 @@ function updateGaze(): boolean {
       gazeHeading = (gazeHeading + diff * 0.15 + 360) % 360
     }
     setGazeLook('track')
+    aimBeam(gazeHeading, 0.06 + 0.02 * Math.abs(Math.sin(t * 6)))
   } else if (t < g.warning) {
     setGazeLook('lock')
+    aimBeam(gazeHeading, 0.1)
   } else if (t < g.warning + g.flashSeconds) {
     setGazeLook('fire')
     if (!gazeFired) {
       gazeFired = true
       if (p && inCone(p, center, gazeHeading, g.coneDeg, g.range)) damagePlayer(g.damage, 'The Gaze')
     }
+    // The blast sweeps across the whole cone, so you see it pass over the floor.
+    const k = (t - g.warning) / g.flashSeconds
+    const sweep = gazeHeading + (k * 2 - 1) * (g.coneDeg / 2)
+    const ground = aimBeam(sweep, 0.55)
+    setSparks({ x: ground.x, y: ground.y, z: ground.z })
   } else {
     endGaze()
     return true
@@ -199,6 +244,11 @@ function updateGaze(): boolean {
 function endGaze() {
   gazeStage = 'off'
   if (gazePivot) Transform.getMutable(gazePivot).position = HIDDEN
+  if (gazeBeam) {
+    Transform.getMutable(gazeBeam).position = HIDDEN
+    Transform.getMutable(gazeBeamGlow).position = HIDDEN
+  }
+  setSparks(undefined)
 }
 
 // ---------------------------------------------------------------- Aftershock
@@ -265,9 +315,9 @@ function updateAftershock(): boolean {
       continue
     }
     const rad = (deg * Math.PI) / 180
-    tr.position = Vector3.create(center.x + Math.sin(rad) * r, 0.18 * pulse, center.z + Math.cos(rad) * r)
+    tr.position = Vector3.create(center.x + Math.sin(rad) * r, 0.22 * pulse, center.z + Math.cos(rad) * r)
     tr.rotation = Quaternion.fromEulerDegrees(0, deg + 90, 0)
-    tr.scale = Vector3.create(segLen, 0.36 * pulse, a.bandWidth * 0.7)
+    tr.scale = Vector3.create(segLen, 0.44 * pulse, a.bandWidth * 0.55)
   }
   // Safe lanes: ivory strips along each gap, from the dais to the wall.
   active.wave.gaps.forEach((g, i) => {

@@ -14,6 +14,8 @@ Every non-code file in the scene must be listed here before it is committed. The
 
 The Watcher GLBs are listed in `.gitignore` until Aholo's terms are confirmed to allow public, open-source redistribution. The game falls back to a primitive Watcher when they are absent. Arena and effects are procedural SDK primitives.
 
+| assets/images/glow.png, spark.png | generated procedurally for this project (Python/PIL) | project | MIT (with the code) | 2026-11-25 | No | Yes |
+
 ## Third-party code
 
 - Decentraland SDK7 (`@dcl/sdk`, `@dcl/js-runtime`): Apache-2.0, installed via npm, not vendored.

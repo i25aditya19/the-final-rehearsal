@@ -96,3 +96,15 @@ test('heading helpers', () => {
   near(headingDeg(v3(1, 0, 0)), 90)
   near(headingDiffDeg(350, 10), 20)
 })
+
+import { stopDistance } from '../src/combat/aim'
+
+test('missed spells stop at the wall or the floor, never beyond range', () => {
+  const c = v3(40, 0, 40)
+  // From 10 m south of centre flying south: wall (radius 23) is 13 m away.
+  near(stopDistance(v3(40, 1.3, 30), v3(0, 0, -1), c, 23, 46), 13)
+  // Aiming down hits the floor first.
+  near(stopDistance(v3(40, 1.3, 30), norm(v3(0, -1, 1)), c, 23, 46), 1.3 * Math.SQRT2)
+  // Range caps it.
+  near(stopDistance(v3(40, 1.3, 30), v3(0, 0, -1), c, 23, 5), 5)
+})

@@ -7,12 +7,14 @@
  */
 
 export const ARENA = {
-  /** Scene is 3x3 parcels (48m x 48m). Arena centre in scene coordinates. */
-  center: { x: 24, y: 0, z: 24 },
+  /** Scene is 5x5 parcels (80m x 80m). Arena centre in scene coordinates. */
+  center: { x: 40, y: 0, z: 40 },
   /** Unobstructed circular playable floor radius. */
-  playableRadius: 12,
+  playableRadius: 20,
   /** Margin between the playable floor and walls/decoration. */
-  borderMargin: 2,
+  borderMargin: 3,
+  /** Radius of the central dais (the Watcher hovers above it). */
+  daisRadius: 4.5,
   /** Number of directional sectors around the boss (90 degrees each). */
   sectorCount: 4,
   /** Angular hysteresis at sector boundaries, to avoid surprising flips. */
@@ -40,10 +42,10 @@ export const BOSS = {
   maxHealth: 300,
   phaseHealth: 100,
   /** Forgiving cylindrical hit volume around the boss. */
-  hitRadius: 1.6,
-  hitHeight: 5.6,
+  hitRadius: 2.1,
+  hitHeight: 7.2,
   /** Height of the boss's centre (model origin) above the floor. */
-  hoverHeight: 3.05
+  hoverHeight: 3.85
 } as const
 
 /**
@@ -53,7 +55,7 @@ export const BOSS = {
  */
 export const WATCHER_MODEL = {
   enabled: true,
-  scale: 1.3,
+  scale: 1.65,
   body: 'assets/boss/watcher_body.glb',
   helm: 'assets/boss/watcher_helm.glb',
   mask: 'assets/boss/watcher_mask.glb',
@@ -62,14 +64,14 @@ export const WATCHER_MODEL = {
   /** Head centre in body-model units (front is +Z). Halo and mask are placed relative to it. */
   head: { x: 0, y: 1.78, z: 0 },
   /** Halo model diameter is 0.30 m; three rings at these world diameters, behind the head. */
-  haloDiameters: [1.5, 2.15, 2.8],
+  haloDiameters: [1.9, 2.7, 3.5],
   haloSpeeds: [16, -10, 6],
-  haloOffsetZ: -0.6,
+  haloOffsetZ: -0.75,
   /** Spectral hands floating beside the body (world metres relative to the boss root). */
-  handScale: 1.6,
+  handScale: 2.0,
   handOffsets: [
-    { x: -2.0, y: 0.2, z: 0.7 },
-    { x: 2.0, y: 0.2, z: 0.7 }
+    { x: -2.6, y: 0.3, z: 0.9 },
+    { x: 2.6, y: 0.3, z: 0.9 }
   ],
   /** Mask placement when it replaces the helm (final transformation), body-model units. */
   maskScale: 1.9,
@@ -80,8 +82,10 @@ export const IMPRINT = {
   cooldown: 1,
   directDamage: 5,
   echoDamage: 3,
-  /** Range of a spell trace before it fizzles. */
-  range: 30,
+  /** Range of a spell before it fizzles. */
+  range: 46,
+  /** Flight speed of a spell projectile (m/s). */
+  projectileSpeed: 34,
   /** Spell leaves the caster at this height above the avatar's feet. */
   castHeight: 1.3,
   /**
@@ -106,7 +110,7 @@ export const ECHO = {
   maxSlots: 4,
   maxCorrupted: 1,
   /** Casting within this distance of an existing echo refreshes it instead of adding one. */
-  minSeparation: 2,
+  minSeparation: 3,
   /**
    * Forgiving synchronization (brief 7.2 allows it): a new or refreshed echo joins the cycle of
    * the existing formation if its natural first repeat would land within this many seconds of
@@ -145,7 +149,7 @@ export const ATTACKS = {
    * BASELINE was 45 deg / 1.2 s / 0.6 s locked; narrowed and lengthened slightly so a sidestep
    * is achievable at the arena edge with native movement. Tune after playtests.
    */
-  gaze: { coneDeg: 38, warning: 1.35, lockedAim: 0.75, damage: 15, range: 15, flashSeconds: 0.25 },
+  gaze: { coneDeg: 34, warning: 1.5, lockedAim: 0.8, damage: 15, range: 24, flashSeconds: 0.35 },
   /**
    * Aftershock: low ring wave expanding from the dais. Avoid by jumping over it or by standing in
    * one of the safe gaps. Two waves, the second `repeatDelay` s after the first.
@@ -154,9 +158,9 @@ export const ATTACKS = {
     warning: 1.5,
     damage: 10,
     repeatDelay: 4,
-    startRadius: 3.2,
-    speed: 7.5,
-    bandWidth: 0.9,
+    startRadius: 4.6,
+    speed: 10,
+    bandWidth: 1.1,
     /** Feet higher than this when the wave passes = jumped clear. */
     jumpClear: 0.45,
     gapCount: 2,
