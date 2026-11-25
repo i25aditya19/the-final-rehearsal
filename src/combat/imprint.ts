@@ -3,11 +3,11 @@
 import { InputAction, PointerEventType, PointerLock, PrimaryPointerInfo, Transform, engine, inputSystem } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { isMobile } from '@dcl/sdk/platform'
-import { ARENA, BOSS, COLORS, IMPRINT } from '../config'
+import { ARENA, BOSS, COLORS, IMPRINT, UI } from '../config'
 import { computeShot, sectorOf } from './aim'
 import { bossHitVolume } from '../boss/watcher'
 import { spawnTracer } from '../effects/tracers'
-import { damageBoss, state } from '../game/state'
+import { damageBoss, isActive, state } from '../game/state'
 import { leaveEcho } from '../echoes/echoSystem'
 import { v3 } from '../math/vec'
 
@@ -27,8 +27,11 @@ function imprintSystem() {
   const lock = PointerLock.getOrNull(engine.CameraEntity)
   state.pointerLocked = isMobile() || !lock || lock.isPointerLocked
 
-  // M1 test key: F refills the boss so aiming can be tested repeatedly.
-  if (inputSystem.isTriggered(InputAction.IA_SECONDARY, PointerEventType.PET_DOWN)) refillBoss()
+  if (!isActive()) return
+  // Debug key: F refills the boss so aiming can be tested repeatedly.
+  if (UI.showDebug && inputSystem.isTriggered(InputAction.IA_SECONDARY, PointerEventType.PET_DOWN)) refillBoss()
+  // Ignore the click that pressed Retry.
+  if (state.time < 0.4) return
 
   if (!inputSystem.isTriggered(InputAction.IA_POINTER, PointerEventType.PET_DOWN)) return
 

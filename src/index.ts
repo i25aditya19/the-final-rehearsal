@@ -9,6 +9,8 @@ import { initEchoes } from './echoes/echoSystem'
 import { createEchoViews } from './echoes/echoView'
 import { state } from './game/state'
 import { setupHud } from './ui/hud'
+import { initSession } from './game/session'
+import { initAttacks } from './boss/attacks'
 
 /** Single session clock. Runs first each frame; large hitches are clamped. */
 function clockSystem(dt: number) {
@@ -17,11 +19,13 @@ function clockSystem(dt: number) {
 
 export function main() {
   engine.addSystem(clockSystem, 200000, "clock") // higher priority runs first (regular = 100000)
+  initSession()
   createWatcher()
   createTracerPool()
   initImprint()
   initEchoes()
   createEchoViews()
+  initAttacks()
   setupHud()
-  console.log('[FinalRehearsal] M2 loaded')
+  console.log('[FinalRehearsal] M3 loaded')
 }

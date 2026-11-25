@@ -135,8 +135,33 @@ export const CORRUPTION = {
 } as const
 
 export const ATTACKS = {
-  gaze: { coneDeg: 45, warning: 1.2, lockedAim: 0.6, damage: 15 },
-  aftershock: { warning: 1.5, damage: 10, repeatDelay: 4 },
+  /** Seconds after the run starts before the first attack (onboarding grace). */
+  firstAttackDelay: 12,
+  /** Quiet time between the end of one attack and the next warning. */
+  recovery: 4.5,
+  /**
+   * The Gaze: crimson cone from the boss toward the player. Tracks during (warning - lockedAim),
+   * then locks; damage once if the player is inside when it fires.
+   * BASELINE was 45 deg / 1.2 s / 0.6 s locked; narrowed and lengthened slightly so a sidestep
+   * is achievable at the arena edge with native movement. Tune after playtests.
+   */
+  gaze: { coneDeg: 38, warning: 1.35, lockedAim: 0.75, damage: 15, range: 15, flashSeconds: 0.25 },
+  /**
+   * Aftershock: low ring wave expanding from the dais. Avoid by jumping over it or by standing in
+   * one of the safe gaps. Two waves, the second `repeatDelay` s after the first.
+   */
+  aftershock: {
+    warning: 1.5,
+    damage: 10,
+    repeatDelay: 4,
+    startRadius: 3.2,
+    speed: 7.5,
+    bandWidth: 0.9,
+    /** Feet higher than this when the wave passes = jumped clear. */
+    jumpClear: 0.45,
+    gapCount: 2,
+    gapDeg: 50
+  },
   blindSpot: { warning: 2, safeSectorDeg: 90, vulnerability: 5, damage: 15 },
   finalObservation: { pulseDamage: 20, openWindow: 5, cycle: 11 }
 } as const

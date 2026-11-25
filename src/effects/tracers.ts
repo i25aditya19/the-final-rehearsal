@@ -5,6 +5,7 @@ import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { IMPRINT } from '../config'
 import { V3 } from '../math/vec'
 import { state } from '../game/state'
+import { onReset } from '../game/session'
 
 const POOL_SIZE = 28
 type Tracer = { entity: Entity; until: number; duration: number; width: number; from: V3; to: V3; color: string; intensity: number }
@@ -19,6 +20,7 @@ export function createTracerPool() {
     pool.push({ entity: e, until: -1, duration: 1, width: 0, from: HIDDEN, to: HIDDEN, color: '', intensity: 0 })
   }
   engine.addSystem(tracerSystem)
+  onReset(clearTracers)
 }
 
 export type TracerOpts = { width?: number; seconds?: number; intensity?: number }
@@ -74,5 +76,10 @@ function tracerSystem() {
 }
 
 export function clearTracers() {
-  for (const t of pool) t.until = state.time
+  for (const t of pool) {
+    t.until = -1
+    const tr = Transform.getMutable(t.entity)
+    tr.scale = Vector3.Zero()
+    tr.position = HIDDEN
+  }
 }

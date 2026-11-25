@@ -20,7 +20,8 @@ import {
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA, BOSS, COLORS, WATCHER_MODEL as M } from '../config'
 import { HitCylinder } from '../combat/aim'
-import { state } from '../game/state'
+import { isActive, state } from '../game/state'
+import { onReset } from '../game/session'
 
 const col4 = (hex: string) => Color4.fromHexString(hex)
 const col3 = (hex: string) => {
@@ -80,6 +81,7 @@ export function createWatcher() {
   else showFallback(true)
 
   engine.addSystem(watcherSystem)
+  onReset(() => setVisage('helm'))
 }
 
 function createModel() {
@@ -196,12 +198,14 @@ function watcherSystem(dt: number) {
   // Preview key: 1 swaps helm <-> ivory mask (final-transformation look). Remove before release.
   if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) setVisage(visage === 'helm' ? 'mask' : 'helm')
 
-  // Idle levitation and a slow, patient sway.
+  // Idle levitation and a slow, patient sway. On victory he sinks (full cinematic in M6).
   const tr = Transform.getMutable(root)
-  tr.position.y = BOSS.hoverHeight + Math.sin(t * 1.1) * 0.14
+  const sink = state.phase === 'victory' ? Math.min(1.6, (t - state.endedAt) * 0.45) : 0
+  tr.position.y = BOSS.hoverHeight + Math.sin(t * 1.1) * 0.14 - sink
+  const frozen = state.phase === 'victory'
 
   // Glide-turn to face the player.
-  if (Transform.has(engine.PlayerEntity)) {
+  if (isActive() && Transform.has(engine.PlayerEntity)) {
     const p = Transform.get(engine.PlayerEntity).position
     const dx = p.x - ARENA.center.x
     const dz = p.z - ARENA.center.z
@@ -223,7 +227,7 @@ function watcherSystem(dt: number) {
     // The Archive: independent rotation in the ring plane plus a slow breathing tilt.
     halos.forEach((h, i) => {
       const ht = Transform.getMutable(h.entity)
-      const spin = (t * h.speed) % 360
+      const spin = ((frozen ? state.endedAt : t) * h.speed) % 360
       ht.rotation = Quaternion.fromEulerDegrees(h.tilt + Math.sin(t * 0.4 + i) * 3, Math.sin(t * 0.3 + i * 2) * 4, spin)
     })
 

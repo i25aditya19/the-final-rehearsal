@@ -4,7 +4,7 @@ import { ARENA, COLORS, CONVERGENCE, ECHO, IMPRINT } from '../config'
 import { resolveShot, sectorOf } from '../combat/aim'
 import { bossHitVolume } from '../boss/watcher'
 import { spawnTracer } from '../effects/tracers'
-import { damageBoss, say, state } from '../game/state'
+import { damageBoss, isActive, say, speak, state } from '../game/state'
 import { V3, headingDeg, sub, v3 } from '../math/vec'
 import { Echo, EchoRules, convergenceDamage, placeEcho, readyGroup, scheduleNext } from './echoLogic'
 
@@ -38,7 +38,7 @@ export function echoSector(e: Echo): number {
 }
 
 function echoSystem() {
-  if (state.bossHp <= 0) return
+  if (!isActive()) return
 
   // Ordinary repeats: each echo fires its stored spell on its own beat.
   for (const e of state.echoes) {
@@ -46,11 +46,12 @@ function echoSystem() {
     const shot = resolveShot(e.origin, e.dir, bossHitVolume(), IMPRINT.range)
     spawnTracer(e.origin, shot.end, COLORS.echoCyan, shot.hit, { width: IMPRINT.tracerWidth * 0.8 })
     if (shot.hit) damageBoss(IMPRINT.echoDamage)
+    if (state.echoRepeats === 0) speak('firstEcho', 'There you are. Again.')
     state.echoRepeats++
     scheduleNext(e, state.time, ECHO.repeatInterval)
   }
 
-  if (inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) tryConvergence()
+  if (state.time > 0.4 && inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) tryConvergence()
 }
 
 /** E: fire every ready echo together. Invalid attempts never consume the cooldown. */
@@ -95,6 +96,8 @@ function tryConvergence() {
   state.convergenceReadyAt = state.time + CONVERGENCE.cooldown
   state.convergences++
   state.lastConvergence = { count: group.length, hits, damage, sectors: hitSectors.size, at: state.time }
+  state.bestConvergence = Math.max(state.bestConvergence, hits)
+  if (hits >= 2) speak('firstSync', 'You are learning things you were never meant to know.')
   if (hits >= 2) say(`${hits}-WAY CONVERGENCE  ·  ${damage} damage  ·  ${hitSectors.size} sector${hitSectors.size === 1 ? '' : 's'}`, 2.5)
   else if (hits === 1) say('Convergence: only one beam reached The Watcher')
   else say('Convergence missed: echoes must face The Watcher')

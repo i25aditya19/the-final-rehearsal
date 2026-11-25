@@ -1,18 +1,33 @@
 // Shared runtime state for the encounter. One object, reset in one place.
-import { BOSS } from '../config'
+import { BOSS, PLAYER } from '../config'
 import { Echo } from '../echoes/echoLogic'
 
 export type ShotLog = { kind: 'hit' | 'miss'; damage: number; assisted: boolean; at: number }
 export type ConvergenceLog = { count: number; hits: number; damage: number; sectors: number; at: number }
+export type Phase = 'active' | 'victory' | 'defeat'
+export type EndReason = 'boss' | 'health' | 'time'
 
 export const state = {
-  /** Session clock in seconds (dt-accumulated, clamped per frame). */
+  /** Session clock in seconds (dt-accumulated, clamped per frame). Reset to 0 on retry. */
   time: 0,
+  /** Increments on every retry; lets anything long-running detect a stale run. */
+  runId: 1,
+  phase: 'active' as Phase,
+  endReason: undefined as EndReason | undefined,
+  endedAt: 0,
+
   bossHp: BOSS.maxHealth as number,
+  playerHp: PLAYER.maxVitality as number,
+  playerImmuneUntil: 0,
+  playerHitAt: -10,
+  damageTaken: 0,
+  lastHitBy: '' as string,
+
   imprintReadyAt: 0,
   convergenceReadyAt: 0,
   lastShot: undefined as ShotLog | undefined,
   lastConvergence: undefined as ConvergenceLog | undefined,
+  bestConvergence: 0,
   shots: 0,
   hits: 0,
   echoRepeats: 0,
@@ -25,30 +40,66 @@ export const state = {
   bossFlashUntil: 0,
   /** Short feedback line under the HUD (e.g. why E did nothing). */
   message: '' as string,
-  messageUntil: 0
+  messageUntil: 0,
+  /** The Watcher's spoken line (non-blocking subtitle). */
+  subtitle: '' as string,
+  subtitleUntil: 0,
+  saidLines: {} as Record<string, boolean>
 }
+
+export const isActive = () => state.phase === 'active'
 
 export function say(text: string, seconds = 2.2) {
   state.message = text
   state.messageUntil = state.time + seconds
 }
 
+/** The Watcher speaks a line once per run (or always, with once=false). */
+export function speak(key: string, text: string, seconds = 3.5, once = true) {
+  if (once && state.saidLines[key]) return
+  state.saidLines[key] = true
+  state.subtitle = text
+  state.subtitleUntil = state.time + seconds
+}
+
 export function damageBoss(amount: number): number {
+  if (!isActive()) return 0
   const dmg = Math.max(0, Math.min(amount, state.bossHp))
   if (dmg <= 0) return 0
   state.bossHp -= dmg
   state.bossFlashUntil = state.time + 0.12
-  if (state.bossHp <= 0) console.log('[FinalRehearsal] boss HP reached 0 (victory flow arrives in M3)')
+  return dmg
+}
+
+/** Damage the player once per attack event, honouring post-hit immunity. Returns damage dealt. */
+export function damagePlayer(amount: number, source: string): number {
+  if (!isActive() || state.time < state.playerImmuneUntil) return 0
+  const dmg = Math.max(0, Math.min(amount, state.playerHp))
+  state.playerHp -= dmg
+  state.damageTaken += dmg
+  state.playerImmuneUntil = state.time + PLAYER.postHitImmunity
+  state.playerHitAt = state.time
+  state.lastHitBy = source
   return dmg
 }
 
 export function resetState() {
   state.time = 0
+  state.runId++
+  state.phase = 'active'
+  state.endReason = undefined
+  state.endedAt = 0
   state.bossHp = BOSS.maxHealth
+  state.playerHp = PLAYER.maxVitality
+  state.playerImmuneUntil = 0
+  state.playerHitAt = -10
+  state.damageTaken = 0
+  state.lastHitBy = ''
   state.imprintReadyAt = 0
   state.convergenceReadyAt = 0
   state.lastShot = undefined
   state.lastConvergence = undefined
+  state.bestConvergence = 0
   state.shots = 0
   state.hits = 0
   state.echoRepeats = 0
@@ -58,4 +109,7 @@ export function resetState() {
   state.bossFlashUntil = 0
   state.message = ''
   state.messageUntil = 0
+  state.subtitle = ''
+  state.subtitleUntil = 0
+  state.saidLines = {}
 }

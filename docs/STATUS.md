@@ -10,7 +10,7 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 | M0 | Setup: SDK7 scaffold, skills, World config, build | **Done** (verified in local preview) |
 | M1 | Greybox arena, placeholder Watcher, Imprint shot | **Done**: creator verified in Chrome 2026-11-25 (6/7 hits, HP bar, sectors, ~30 FPS) |
 | M2 | Echoes, repeat timing, Convergence (go/no-go) | **Built, build + 25 unit tests pass; creator playtest pending (go/no-go)** |
-| M3 | Player HP, Gaze, Aftershock, victory/defeat/retry | Not started |
+| M3 | Player HP, Gaze, Aftershock, victory/defeat/retry | **Built, build + 32 unit tests pass; creator playtest pending** |
 | M4 | Corruption, Blind Spot, phase gates, final barrier, timeout | Not started |
 | M5 | Real Watcher and chamber assets | Not started |
 | M6 | Telegraph/FX/audio polish, HUD, results, ending | Not started |
@@ -56,6 +56,18 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Not yet verified in the client: emissive eye glow, metallic halo look under Decentraland lighting, negative-scale (mirrored) hand rendering, double-sided materials.
 - Licensing: GLBs are gitignored until Aholo terms are confirmed; delivered to the creator directly.
 
+## M3 record
+
+- Session state machine (`src/game/session.ts`): active → victory (boss 0 HP) / defeat (vitality 0 or 285 s hard cap). Systems stop on terminal states; the cursor is released for the results button. **Retry without reload**: `resetState()` plus per-system reset hooks (attacks, tracers, Watcher look); clock restarts at 0, `runId` increments; first 0.4 s after retry ignores clicks/E so the retry press cannot cast.
+- Player vitality 100, 0.8 s post-hit immunity, one damage per attack event, crimson screen-edge flash (no full-screen flash), damage source recorded for the defeat screen.
+- **The Gaze**: crimson floor fan from the dais toward the player; tracks smoothly for 0.6 s, locks for 0.75 s (brighter), fires 15 damage if inside, 0.25 s flash. **Deviation from BASELINE**: 38° wide and 1.35 s warning (brief: ~45°, 1.2 s, 0.6 s locked) so the sidestep is reachable at the arena edge. Tunable in `ATTACKS.gaze`.
+- **Aftershock**: two crimson ring waves (second 4 s after the first, each with its own 1.5 s pulsing warning at the dais) expanding at 7.5 m/s; 10 damage per wave, once per wave; swept hit test. Avoid by jumping (feet > 0.45 m when it passes; **unverified in client**) or by standing in one of two 50° gaps marked with pale floor lanes, placed next to the player when the warning appears so they are reachable.
+- Scheduler: first attack at 12 s (onboarding grace), sequence Gaze, Gaze, Aftershock, repeating, 4.5 s recovery between attacks, never two at once.
+- Dialogue subtitles (non-blocking, once per run): opening, first echo repeat, first successful Convergence, victory, defeat.
+- HUD: vitality + remaining time panel, attack name label during telegraphs, results screen (title, reason, time, best Convergence, vitality lost, spells cast, tip, REHEARSE AGAIN / REWRITE THE MOMENT button, or E).
+- Victory placeholder: halos freeze, Watcher sinks; full gameplay-driven cinematic is M6.
+- Phases, gates, corruption, Blind Spot, Final Observation: M4. No audio yet (M6).
+
 ## Scene budget (9 parcels)
 
 90,000 triangles · 1,800 entities · 66 materials · 33 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
@@ -70,4 +82,4 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 
 ## Next step
 
-Creator: playtest M2 (go/no-go): is placing echoes and firing a Convergence understandable and fun? Is E reliable? New triangle count? Then M3 (player HP, Gaze, Aftershock, victory/defeat/retry). Watcher GLB from Aholo can be integrated as soon as it arrives.
+Creator: playtest M2+M3 together (echo/Convergence feel, Gaze sidestep, Aftershock jump vs gaps, retry), plus the Watcher model look and triangle count. Confirm Aholo redistribution terms so the models can be committed. Then M4: phases, gates, corruption, Blind Spot, Final Observation.
