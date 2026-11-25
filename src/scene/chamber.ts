@@ -1,12 +1,16 @@
 // Animated chamber pieces (static architecture lives in main.composite):
 // - the silver astronomical mechanism overhead (two rings of the Aholo astro_rings model)
 // - floating enchanted candles bobbing around the arena edge
-import { Entity, GltfContainer, Material, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { Entity, GltfContainer, GltfNodeModifiers, Material, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA } from '../config'
 import { state } from '../game/state'
 
 const RINGS = 'assets/environment/astro_rings.glb'
+const CLOCK = 'assets/environment/astro_clock.glb'
+const CLOCK_Y = 25.5
+const CLOCK_SCALE = 15 // 0.6 m model -> 9 m
+let clock: Entity
 const CANDLE = 'assets/environment/floating_candle.glb'
 const CANDLE_COUNT = 24
 const CANDLE_SCALE = 2.2 // 0.28 m model -> 0.62 m
@@ -24,8 +28,25 @@ function gltf(src: string, pos: Vector3, scale: number): Entity {
 export function initChamber() {
   const c = ARENA.center
   // Model is a 0.6 m disc facing +Z; laid flat overhead and turned slowly.
-  rings.push({ e: gltf(RINGS, Vector3.create(c.x, 24, c.z), 32), speed: 3, tilt: 0, y: 24 })
-  rings.push({ e: gltf(RINGS, Vector3.create(c.x, 21.5, c.z), 19), speed: -5, tilt: 12, y: 21.5 })
+  rings.push({ e: gltf(RINGS, Vector3.create(c.x, CLOCK_Y, c.z), 34), speed: 3, tilt: 0, y: CLOCK_Y })
+  rings.push({ e: gltf(RINGS, Vector3.create(c.x, CLOCK_Y - 2.5, c.z), 22), speed: -5, tilt: 12, y: CLOCK_Y - 2.5 })
+
+  // The astronomical clock hangs at the centre beneath the vault apex on a silver chain.
+  clock = gltf(CLOCK, Vector3.create(c.x, CLOCK_Y, c.z), CLOCK_SCALE)
+  const chainTop = 34.6
+  const chainBottom = CLOCK_Y + 0.3 * CLOCK_SCALE
+  const chain = engine.addEntity()
+  Transform.create(chain, { position: Vector3.create(c.x, (chainTop + chainBottom) / 2, c.z), scale: Vector3.create(0.18, chainTop - chainBottom, 0.18) })
+  MeshRenderer.setCylinder(chain)
+  Material.setPbrMaterial(chain, { albedoColor: Color4.create(0.78, 0.78, 0.8, 1), roughness: 0.5, castShadows: false })
+
+  // The enclosure must not darken the arena: the wall and vault cast no shadows, so the
+  // daylight still models the architecture while the sky stays hidden.
+  for (const name of ['Arena/Chamber vault', 'Arena/Chamber wall']) {
+    const e = engine.getEntityOrNullByName(name)
+    if (e) GltfNodeModifiers.createOrReplace(e, { modifiers: [{ path: '', castShadows: false }] })
+    else console.log(`[FinalRehearsal] chamber piece not found: ${name}`)
+  }
 
   const flameColor = Color4.fromHexString('#FFE6C2')
   for (let i = 0; i < CANDLE_COUNT; i++) {
@@ -46,6 +67,8 @@ export function initChamber() {
 
 function chamberSystem() {
   const t = state.time
+  // The clock turns slowly so its face sweeps the whole chamber.
+  if (clock) Transform.getMutable(clock).rotation = Quaternion.fromEulerDegrees(0, (t * 4) % 360, 0)
   for (const r of rings) {
     Transform.getMutable(r.e).rotation = Quaternion.multiply(
       Quaternion.fromEulerDegrees(r.tilt * Math.sin(t * 0.1), (t * r.speed) % 360, 0),

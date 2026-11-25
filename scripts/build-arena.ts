@@ -140,15 +140,10 @@ const disc = (name: string, radius: number, color: string, emissive?: number) =>
   make({ name: `${PREFIX}/${name}`, mesh: 'cylinder', pos: [0, y, 0], scale: [radius * 2, 0.008, radius * 2], color, emissive, parent: root })
   y += 0.004
 }
-disc('Apron', wallR + 1.5, COLORS.obsidian)
-disc('EdgeLine', R + 0.12, LINE, 0.15)
-disc('Floor', R, FLOOR_BASE)
-for (const r of [R * 0.75, R * 0.5]) {
-  disc(`Ring ${r.toFixed(1)} line`, r + 0.06, LINE, 0.15)
-  disc(`Ring ${r.toFixed(1)}`, r, FLOOR_BASE)
-}
-disc('Dais line', ARENA.daisRadius + 0.12, LINE, 0.25)
-disc('Dais', ARENA.daisRadius, COLORS.charcoal)
+// Astronomical marble floor (procedural, scripts/asset-pipeline/build_chamber_shell.py): the
+// gameplay rings (0.75 R, 0.5 R), the playable edge, zodiac ring and dais are baked into it.
+make({ name: `${PREFIX}/Marble floor`, mesh: 'none', gltf: 'assets/environment/chamber_floor.glb', pos: [0, 0.003, 0], scale: [1, 1, 1], color: '', parent: root })
+void disc
 
 // Sector boundaries on the diagonals (sectors are centred on N/E/S/W).
 const lineLen = R - ARENA.daisRadius
@@ -199,7 +194,7 @@ for (let i = 0; i < segments; i++) {
     pos: [Math.sin(rad) * wallR, 1.5, Math.cos(rad) * wallR],
     scale: [segLen, 3, 0.7],
     rotY: deg,
-    color: COLORS.stone,
+    color: '#6A6A6A',
     collider: 2,
     parent: root
   })
@@ -230,20 +225,6 @@ const ring = wallR + 1.8 // pillar/arch circle
 const faceCentre = (deg: number) => deg + 180
 const DOOR_DEG = 180 // grand entrance behind the south spawn
 const pillarCount = 12
-
-// Floor: astronomical engravings (zodiac ticks and twelve star marks).
-for (let i = 0; i < 48; i++) {
-  const deg = i * 7.5
-  const rad = (deg * Math.PI) / 180
-  const major = i % 4 === 0
-  make({ name: `${PREFIX}/Tick ${i}`, mesh: 'box', pos: [Math.sin(rad) * (R - 0.9), y + 0.003, Math.cos(rad) * (R - 0.9)], scale: [0.07, 0.01, major ? 1.2 : 0.55], rotY: deg, color: LINE, emissive: 0.2, parent: root })
-}
-for (let i = 0; i < 12; i++) {
-  const deg = i * 30 + 15
-  const rad = (deg * Math.PI) / 180
-  const r = R * 0.62
-  make({ name: `${PREFIX}/Star ${i}`, mesh: 'box', pos: [Math.sin(rad) * r, y + 0.003, Math.cos(rad) * r], scale: [0.42, 0.01, 0.42], rotY: deg + 45, color: COLORS.ash, emissive: 0.3, parent: root })
-}
 
 for (let i = 0; i < pillarCount; i++) {
   const deg = i * (360 / pillarCount) + 15
@@ -286,19 +267,11 @@ for (let i = 0; i < pillarCount; i++) {
   }
 }
 
-// Outer wall: tall dark masonry closing the chamber behind arches and windows.
-const outerR = ring + 3.4
-const outerSegs = 36
-const outerLen = 2 * outerR * Math.tan(Math.PI / outerSegs) + 0.2
-for (let i = 0; i < outerSegs; i++) {
-  const deg = (i + 0.5) * (360 / outerSegs)
-  const rad = (deg * Math.PI) / 180
-  make({ name: `${PREFIX}/Outer wall ${i}`, mesh: 'box', pos: [Math.sin(rad) * outerR, 8, Math.cos(rad) * outerR], scale: [outerLen, 16, 0.8], rotY: deg, color: '#1A1A1A', parent: root })
-  make({ name: `${PREFIX}/Cornice ${i}`, mesh: 'box', pos: [Math.sin(rad) * (outerR - 0.6), 15.4, Math.cos(rad) * (outerR - 0.6)], scale: [outerLen, 0.6, 1.6], rotY: deg, color: COLORS.stone, parent: root })
-}
-
-// Astronomical clock high on the north wall, facing the arena (0.6 m model -> 8.4 m).
-make({ name: `${PREFIX}/Astronomical clock`, mesh: 'none', gltf: ENV + 'astro_clock.glb', pos: [0, 21.5, outerR - 1.2], scale: [14, 14, 14], rotY: 180, color: '', parent: root })
+// Enclosure: continuous ashlar wall to the springing line and a pointed ribbed vault with a
+// gallery ledge joining the pillar and arch tops to the wall (procedural, see
+// scripts/asset-pipeline/build_chamber_shell.py). No colliders: the low wall bounds the fight.
+make({ name: `${PREFIX}/Chamber wall`, mesh: 'none', gltf: 'assets/environment/chamber_wall.glb', pos: [0, 0, 0], scale: [1, 1, 1], color: '', parent: root })
+make({ name: `${PREFIX}/Chamber vault`, mesh: 'none', gltf: 'assets/environment/chamber_vault.glb', pos: [0, 0, 0], scale: [1, 1, 1], color: '', parent: root })
 
 writeFileSync(COMPOSITE, JSON.stringify(composite, null, 2) + '\n')
 console.log(`Arena written: ${nextId - root} entities (ids ${root}..${nextId - 1}), playable radius ${R} m, wall at ${wallR} m`)

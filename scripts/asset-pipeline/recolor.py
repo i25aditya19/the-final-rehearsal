@@ -57,6 +57,16 @@ elif mode == 'cyan':
     # Friendly spectral echo: luminance tinted toward #85DFFF.
     l = np.clip(lum / 255.0 * 1.25 + 0.08, 0, 1)
     out = l * np.array([133, 223, 255], np.float32)
+elif mode.startswith('tone'):
+    # tone:lo:hi[:r:g:b] - remap the texture's 2-98 % luminance range onto [lo, hi] (0-1),
+    # keeping its detail, optionally tinted. Used to lift dark AI textures to target values.
+    parts = mode.split(':')
+    lo, hi = float(parts[1]), float(parts[2])
+    tint = np.array([float(x) for x in parts[3:6]], np.float32) if len(parts) >= 6 else np.array([1, 1, 1], np.float32)
+    l = lum[..., 0] / 255.0
+    p2, p98 = np.percentile(l, 2), np.percentile(l, 98)
+    n = np.clip((l - p2) / max(1e-3, p98 - p2), 0, 1)
+    out = ((lo + (hi - lo) * n) * 255)[..., None] * tint
 else:
     raise SystemExit('unknown mode')
 

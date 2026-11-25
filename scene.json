@@ -78,7 +78,7 @@
   "worldConfiguration": {
     "name": "rgl10.dcl.eth",
     "skyboxConfig": {
-      "fixedTime": 70200
+      "fixedTime": 48600
     }
   }
 }

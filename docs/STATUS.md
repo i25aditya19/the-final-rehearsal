@@ -101,6 +101,16 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Animated (`src/scene/chamber.ts`): two astronomical ring mechanisms overhead (19 m and 11 m, counter-rotating), 24 floating candles bobbing with flickering flames.
 - **Budget check**: model triangles 143.6k (limit 250k for 25 parcels), about 300 composite entities, assets 4 MB (World budget about 100 MB). Checked with `scripts/asset-pipeline/chamber_render.py` section renders, not in the client yet.
 
+## Enclosed chamber and lighting pass (2026-11-25)
+
+- **Enclosure** (procedural, original, `scripts/asset-pipeline/build_chamber_shell.py`): continuous ashlar wall (r 28.2 m, 0-19 m), pointed ribbed vault to 35 m with a silver star-map/constellation texture, 12 ribs above the 12 pillars, pilasters from the gallery to the springing ring, silver springing and oculus rings, and a **gallery ledge** resting on the pillar/arch tops and joining them to the wall. No sky, clouds or outside scenery visible. Old box outer wall, cornice and stacked floor discs removed.
+- **Floor**: procedural astronomical marble disc (r 23.4 m): mid-grey veined marble, darker polished border, zodiac ring with 12 houses and original glyphs, eight-pointed star, dais; the gameplay rings (0.75 R, 0.5 R, playable edge) are inlaid in the texture. Sector lines and N/E/S/W rune plates remain as glowing overlays. **The creator's "astronomical ritual marble texture" was never received**; drop it in and it can replace this one.
+- **Clock** moved to the centre, hanging on a silver chain beneath the apex at 25.5 m, turning slowly, inside the two counter-rotating astronomical rings.
+- **Materials** (`scripts/asset-pipeline/retone.sh`): each model's tones remapped (2-98 % luminance onto a target range): pillars ash-grey 0.42-0.86, arches 0.38-0.80, door 0.22-0.66, windows 0.34-0.92 with **luminous ivory glass** (emissive from bright glass), clock/rings/halos antique silver 0.40-0.95 with metallic reduced to 0.12-0.15 (metallic surfaces rendered dark without reflections), candles ivory with a soft glow, Watcher robes lifted to show folds (still black). Normals checked: consistent with winding on all models (92-100 %), none flipped.
+- **Lighting**: sky hidden, so a neutral 13:30 sun; the vault and wall have `castShadows: false` (GltfNodeModifiers) so the enclosure does not black out the arena; 5 silver point lights at 11 m, a white key spotlight on the Watcher from above, the crimson under-light (7 lights, mobile budget 8).
+- Gameplay code untouched (42 tests pass).
+- Budget: about 153k model triangles (limit 250k), assets 6 MB.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
