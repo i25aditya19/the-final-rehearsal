@@ -26,6 +26,3 @@ secrets*
 .agents/
 .claude/skills/
 
-# Watcher models (Aholo-generated): kept out of the public repo until the creator confirms
-# Aholo's terms allow public redistribution. See docs/ASSETS.md.
-assets/boss/*.glb

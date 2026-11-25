@@ -54,7 +54,7 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Assembly (`src/boss/watcher.ts`): scale 1.3 (about 5.2 m tall, hovering 0.45 m above the floor), helm in the body frame, 3 halo instances (1.5/2.15/2.8 m) behind the head rotating at 16/-10/6 °/s with breathing tilt, 2 spectral hands (left mirrored) drifting and gesturing out of phase, levitation, glide-turn toward the player with slight sway, hit recoil. About 21.5k triangles when visible.
 - Missing or failed GLB → primitive placeholder (logged); still loading after 20 s → placeholder is shown meanwhile. **Preview key 1 toggles helm ↔ mask** (remove before release).
 - Not yet verified in the client: emissive eye glow, metallic halo look under Decentraland lighting, negative-scale (mirrored) hand rendering, double-sided materials.
-- Licensing: GLBs are gitignored until Aholo terms are confirmed; delivered to the creator directly.
+- Licensing: creator confirmed Aholo terms allow publishing; GLBs committed 2026-11-25.
 
 ## M3 record
 
@@ -79,7 +79,7 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Particles (exactly 8 emitters, max 710 particles): 4 spell trails, 1 impact, 1 Gaze sparks, 1 Watcher shadow aura, 1 ambient silver motes. Soft round sprites `assets/images/glow.png`, `spark.png` (no square particles).
 - Atmosphere: fixed dusk (19:30) via scene.json and runtime SkyboxTime; 4 silver point lights + 1 crimson under-light (5 of 8 mobile budget).
 - Echo ghosts: sphere hood and round casting arm.
-- **Watcher models still not in git**: committing them needs the creator's explicit confirmation that Aholo's terms allow public redistribution (the repo is public). Until then they must be unzipped locally into `assets/boss/`.
+- Watcher models committed to `assets/boss/` after the creator confirmed Aholo's terms allow publishing on GitHub (2026-11-25).
 - Unverified in client: lighting intensity, particle look/budget behaviour, beam orientation (cylinder axis fix), dusk readability.
 
 ## Scene budget (25 parcels)
