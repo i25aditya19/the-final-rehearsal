@@ -7,7 +7,7 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 
 | | Milestone | State |
 | --- | --- | --- |
-| M0 | Setup: SDK7 scaffold, skills, World config, build | **Done in cloud; local preview check by creator pending** |
+| M0 | Setup: SDK7 scaffold, skills, World config, build | **Done** (verified in local preview) |
 | M1 | Greybox arena, placeholder Watcher, Imprint shot | Not started |
 | M2 | Echoes, repeat timing, Convergence (go/no-go) | Not started |
 | M3 | Player HP, Gaze, Aftershock, victory/defeat/retry | Not started |
@@ -23,7 +23,8 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Skills: `npx skills add decentraland/sdk-skills --all` → `.agents/skills/` (commit `8c01cac`, pinned in `skills-lock.json`; not committed, reinstall locally with the same command).
 - `scene.json`: 9 parcels `0,0`–`2,2` (48×48 m), `worldConfiguration.name = rgl10.dcl.eth`, fixed night skybox (22:00), spawn on the south side facing the centre (24, 3, 24).
 - `npm run build`: bundle + type check pass (no errors).
-- Not verified yet: local preview in the Explorer, which only the creator can run.
+- 2026-11-25: creator verified on macOS with `npm run start -- --web` (Bevy Web in Chrome): scene loads, 3x3 floor grid, HUD banner renders. Desktop Client not yet installed (`npm run start` without `--web` fails until it is).
+- Note: the local preview showed a daytime sky; the night `worldConfiguration.skyboxConfig` may only apply in the deployed World. Revisit in M6 (SkyboxTime component if needed).
 
 ## Scene budget (9 parcels)
 
@@ -38,4 +39,4 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 
 ## Next step
 
-Creator: clone, `npm install`, `npm run start`, confirm the preview opens with the "setup OK (M0)" banner. Then M1.
+M1: greybox arena, placeholder Watcher, Imprint shot. Creator to install the Desktop Client (https://dcl.gg/explorer) for control testing.
