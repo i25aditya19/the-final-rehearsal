@@ -33,7 +33,7 @@ npm run start      # opens a local preview
 
 You can also open the folder in the [Decentraland Creator Hub](https://decentraland.org/download/creator-hub) and click **Preview**.
 
-`npm run build` type-checks and bundles the scene.
+`npm run build` type-checks and bundles the scene. `npm test` runs the unit tests. `npm run arena` regenerates the greybox arena in `assets/scene/main.composite` after changing `ARENA` in `src/config.ts`.
 
 ## Project layout
 

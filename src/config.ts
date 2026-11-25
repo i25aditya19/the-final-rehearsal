@@ -51,7 +51,24 @@ export const IMPRINT = {
   directDamage: 5,
   echoDamage: 3,
   /** Range of a spell trace before it fizzles. */
-  range: 30
+  range: 30,
+  /** Spell leaves the caster at this height above the avatar's feet. */
+  castHeight: 1.3,
+  /**
+   * Aim assist: if the shot's horizontal direction is within this many degrees of the boss,
+   * it is snapped onto the boss. Keeps aiming forgiving and predictable.
+   */
+  aimAssistDeg: 6,
+  /** How long a spell trace stays visible. */
+  tracerSeconds: 0.3,
+  tracerWidth: 0.08
+} as const
+
+export const UI = {
+  /** Draw a small scene crosshair while the cursor is locked. */
+  showCrosshair: true,
+  /** Show the M1 debug line (last shot, sector, position). */
+  showDebug: true
 } as const
 
 export const ECHO = {
