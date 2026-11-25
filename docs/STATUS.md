@@ -11,7 +11,7 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 | M1 | Greybox arena, placeholder Watcher, Imprint shot | **Done**: creator verified in Chrome 2026-11-25 (6/7 hits, HP bar, sectors, ~30 FPS) |
 | M2 | Echoes, repeat timing, Convergence (go/no-go) | **Built, build + 25 unit tests pass; creator playtest pending (go/no-go)** |
 | M3 | Player HP, Gaze, Aftershock, victory/defeat/retry | **Built, build + 32 unit tests pass; creator playtest pending** |
-| M4 | Corruption, Blind Spot, phase gates, final barrier, timeout | Not started |
+| M4 | Corruption, Blind Spot, phase gates, final barrier, timeout | **Built, build + 42 unit tests pass; creator playtest pending** |
 | M5 | Real Watcher and chamber assets | Not started |
 | M6 | Telegraph/FX/audio polish, HUD, results, ending | Not started |
 | M7 | Playtests, tuning, licensing check, deploy, submission | Not started |
@@ -81,6 +81,18 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Echo ghosts: sphere hood and round casting arm.
 - Watcher models committed to `assets/boss/` after the creator confirmed Aholo's terms allow publishing on GitHub (2026-11-25).
 - Unverified in client: lighting intensity, particle look/budget behaviour, beam orientation (cylinder axis fix), dusk readability.
+
+## M4 record
+
+- **Phase rules** (`src/game/phaseRules.ts`, pure + tested): floors 200/100/0; phase I full damage; gate I = Convergence with 2 hitting echoes; phase II ordinary spells ×0.25 except during Blind Spot vulnerability, Convergence full; gate II = 3 hitting echoes from 3 quadrants (`PHASES.phase2GateSectors`); phase III barrier admits only a Convergence of 3+ echoes from 3+ quadrants during a Final Observation opening (24 / 40 damage); redirects never pierce it. Gate-opening hits do not carry damage. All boss damage goes through `hitBoss()` (`src/game/phases.ts`).
+- Transitions: 3 s, no attacks and no damage, echo beat paused and resumed, +15 vitality; phase III swaps the helm for the ivory mask and says "I will not look away." Barrier shell: ash at gates, white shield in phase III, gold when open; deflections spark.
+- **Stolen Moment** (`src/boss/corruption.ts`): targets the friendly echo nearest the player; crimson thread from the Watcher's eye to a pulsing anchor; shoot the anchor in 2.5 s to protect it (that cast leaves no echo). Otherwise the echo turns crimson (cyan model hidden) and fires hostile shots: aim follows you 1 s, locks 0.7 s (thicker line), fires (12 damage if within 1.1 m of the path). If the Watcher is between the echo and the locked point, the shot is **redirected** into him (15 damage, echo restored, counted for score). Anchor stays shootable to reclaim; auto-expires after 8 s; 10 s cooldown; never deletes the echo.
+- **Blind Spot** (phase II): four floor quadrants; the pale one is the neighbour quadrant whose border you are closest to; 3 s warning (BASELINE 2 s, lengthened for the 20 m floor), single 15-damage pulse outside it, then 5 s of full damage.
+- **Final Observation** (phase III): crimson floor with four pale safe circles (r 3.2 m at the N/E/S/W runes), 2.2 s warning, 20-damage pulse outside them, then the barrier opens for 5.5 s, then 3.5 s rest.
+- Scheduler per phase: I = Gaze, Gaze, Aftershock; II = Stolen Moment, Gaze, Blind Spot, Aftershock, Gaze, Blind Spot; III = Observation, Observation, Stolen Moment, Observation, Gaze. At gates only Gaze/Aftershock run, with longer recovery. Nothing runs during transitions.
+- Score (brief §10): speed + vitality + 4-way Convergences + redirects, grade S/A/B/C, session personal best; shown on victory.
+- HUD: phase name and BARRIER state in the boss bar, always-visible objective line, stuck-at-gate hints after 8 s, specific "why was this blocked" messages.
+- Echo ghosts now use the Aholo spectral sorcerer model; the primitive figure is a state aura (gold when ready, flash when firing, solid crimson when corrupted).
 
 ## Scene budget (25 parcels)
 

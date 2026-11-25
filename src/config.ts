@@ -135,7 +135,15 @@ export const CORRUPTION = {
   hostileDamage: 12,
   redirectDamage: 15,
   autoExpire: 8,
-  initialInterval: 10
+  initialInterval: 10,
+  /** Hostile shot: aim follows the player while charging, then locks, then fires. */
+  charge: 1.0,
+  lock: 0.7,
+  hostileSpeed: 26,
+  /** Player within this distance of the hostile shot's path when it lands is hit. */
+  hitRadius: 1.1,
+  anchorRadius: 0.9,
+  anchorHeight: 1.4
 } as const
 
 export const ATTACKS = {
@@ -166,8 +174,10 @@ export const ATTACKS = {
     gapCount: 2,
     gapDeg: 50
   },
-  blindSpot: { warning: 2, safeSectorDeg: 90, vulnerability: 5, damage: 15 },
-  finalObservation: { pulseDamage: 20, openWindow: 5, cycle: 11 }
+  /** BASELINE warning 2 s; 3 s so the adjacent safe quadrant is reachable on the larger floor. */
+  blindSpot: { warning: 3, safeSectorDeg: 90, vulnerability: 5, damage: 15 },
+  /** Phase III: warning with safe circles, 20-damage pulse, then the barrier opens. */
+  finalObservation: { warning: 2.2, pulseDamage: 20, openWindow: 5.5, rest: 3.5, safeRadius: 3.2, safeRingFraction: 0.62 }
 } as const
 
 export const PHASES = {

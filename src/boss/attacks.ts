@@ -5,14 +5,24 @@ import { Entity, Material, MaterialTransparencyMode, MeshRenderer, Transform, en
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA, ATTACKS, COLORS } from '../config'
 import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
-import { headingDeg, sub, v3 } from '../math/vec'
-import { damagePlayer, isActive, state } from '../game/state'
+import { distXZ, headingDeg, sub, v3 } from '../math/vec'
+import { damagePlayer, isActive, say, state } from '../game/state'
+import { corruptionReady, startCorruption, updateCorruption } from './corruption'
+import { sectorOf } from '../combat/aim'
 import { watcherEyePosition } from './watcher'
 import { setSparks } from '../effects/vfx'
 import { onReset } from '../game/session'
 
-type AttackKind = 'gaze' | 'aftershock'
-const SEQUENCE: AttackKind[] = ['gaze', 'gaze', 'aftershock']
+type AttackKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation'
+/** Attack order per phase (GAME_DESIGN 7.4 / 8). Phase I introduces Gaze then Aftershock. */
+const SEQUENCES: Record<1 | 2 | 3, AttackKind[]> = {
+  1: ['gaze', 'gaze', 'aftershock'],
+  2: ['stolen', 'gaze', 'blindspot', 'aftershock', 'gaze', 'blindspot'],
+  3: ['observation', 'observation', 'stolen', 'observation', 'gaze']
+}
+/** At a gate only the basic attacks run, so the teaching moment stays readable. */
+const GATE_ALLOWED: AttackKind[] = ['gaze', 'aftershock']
+let sequencePhase = 1
 
 const center = v3(ARENA.center.x, 0, ARENA.center.z)
 const HIDDEN = Vector3.create(0, -30, 0)
@@ -117,6 +127,8 @@ export function initAttacks() {
 }
 
 function resetAttacks() {
+  cancelCurrent()
+  sequencePhase = 1
   current = undefined
   nextAttackAt = ATTACKS.firstAttackDelay
   sequenceIndex = 0
@@ -128,29 +140,65 @@ function playerPos() {
   return Transform.has(engine.PlayerEntity) ? Transform.get(engine.PlayerEntity).position : undefined
 }
 
+function cancelCurrent() {
+  if (!current) return
+  current = undefined
+  endGaze()
+  endAftershock()
+  endBlindSpot()
+  endObservation()
+}
+
+function nextKind(): AttackKind | undefined {
+  const phase = state.bossPhase
+  if (sequencePhase !== phase) {
+    sequencePhase = phase
+    sequenceIndex = 0
+  }
+  const seq = SEQUENCES[phase]
+  for (let tries = 0; tries < seq.length; tries++) {
+    const kind = seq[sequenceIndex++ % seq.length]
+    if (state.stage === 'gate' && !GATE_ALLOWED.includes(kind)) continue
+    if (kind === 'stolen' && !corruptionReady()) continue
+    return kind
+  }
+  return 'gaze'
+}
+
 function attackSystem() {
-  if (!isActive()) {
-    if (current) {
-      current = undefined
-      endGaze()
-      endAftershock()
-    }
+  if (!isActive() || state.stage === 'transition') {
+    if (current) cancelCurrent()
+    if (state.stage === 'transition') nextAttackAt = Math.max(nextAttackAt, state.time + 2.5)
     return
   }
   if (!current) {
-    if (state.time >= nextAttackAt) startAttack(SEQUENCE[sequenceIndex++ % SEQUENCE.length])
+    if (state.time >= nextAttackAt) {
+      const k = nextKind()
+      if (k) startAttack(k)
+    }
     return
   }
-  const finished = current === 'gaze' ? updateGaze() : updateAftershock()
+  const finished =
+    current === 'gaze' ? updateGaze()
+    : current === 'aftershock' ? updateAftershock()
+    : current === 'stolen' ? updateCorruption()
+    : current === 'blindspot' ? updateBlindSpot()
+    : updateObservation()
   if (finished) {
     current = undefined
-    nextAttackAt = state.time + ATTACKS.recovery
+    nextAttackAt = state.time + (state.stage === 'gate' ? ATTACKS.recovery * 1.6 : ATTACKS.recovery)
   }
 }
 
 function startAttack(kind: AttackKind) {
   current = kind
   startedAt = state.time
+  if (kind === 'stolen') {
+    if (!startCorruption()) current = undefined
+    return
+  }
+  if (kind === 'blindspot') return startBlindSpot()
+  if (kind === 'observation') return startObservation()
   if (kind === 'gaze') {
     gazeFired = false
     gazeStage = 'off'
@@ -347,4 +395,175 @@ function endAftershock() {
 /** For the HUD: name of the attack currently telegraphed, if any. */
 export function currentAttack(): AttackKind | undefined {
   return current
+}
+
+// ---------------------------------------------------------------- shared floor fans
+const FAN_RAYS = 6
+function buildFan(parent: Entity, coneDeg: number, inner: number, outer: number, out: Entity[]) {
+  const segs = 3
+  const segLen = (outer - inner) / segs
+  for (let i = 0; i < FAN_RAYS; i++) {
+    const deg = -coneDeg / 2 + (coneDeg * (i + 0.5)) / FAN_RAYS
+    const arm = engine.addEntity()
+    Transform.create(arm, { parent, rotation: Quaternion.fromEulerDegrees(0, deg, 0) })
+    for (let k = 0; k < segs; k++) {
+      const far = inner + (k + 1) * segLen
+      const width = 2 * far * Math.tan(((coneDeg / FAN_RAYS) * Math.PI) / 360) * 1.04
+      const e = engine.addEntity()
+      Transform.create(e, { parent: arm, position: Vector3.create(0, 0.075 + i * 0.001, inner + k * segLen + segLen / 2), scale: Vector3.create(width, 0.01, segLen) })
+      MeshRenderer.setBox(e)
+      out.push(e)
+    }
+  }
+}
+
+// ---------------------------------------------------------------- Blind Spot (phase II)
+const quadrants: { pivot: Entity; parts: Entity[]; look: string }[] = []
+let safeQuadrant = 0
+let blindPulsed = false
+let blindBuilt = false
+
+function ensureBlindSpot() {
+  if (blindBuilt) return
+  blindBuilt = true
+  for (let q = 0; q < 4; q++) {
+    const pivot = engine.addEntity()
+    Transform.create(pivot, { position: HIDDEN, rotation: Quaternion.fromEulerDegrees(0, q * 90, 0) })
+    const parts: Entity[] = []
+    buildFan(pivot, 88, ARENA.daisRadius + 0.3, ARENA.playableRadius, parts)
+    quadrants.push({ pivot, parts, look: '' })
+  }
+}
+
+function quadLook(q: number, look: 'danger' | 'safe' | 'blast' | 'blind') {
+  const Q = quadrants[q]
+  if (Q.look === look) return
+  Q.look = look
+  const hex = look === 'safe' ? COLORS.ivory : look === 'blind' ? COLORS.syncGold : COLORS.dangerCrimson
+  const alpha = look === 'blast' ? 0.6 : look === 'safe' ? 0.28 : look === 'blind' ? 0.18 : 0.22
+  const intensity = look === 'blast' ? 4 : 1.4
+  for (const e of Q.parts) glow(e, hex, alpha, intensity)
+}
+
+function startBlindSpot() {
+  ensureBlindSpot()
+  blindPulsed = false
+  // Safe quadrant: the neighbour whose boundary the player is closest to (always reachable).
+  const p = playerPos()
+  const ph = p ? headingDeg(sub(p, center)) : 0
+  const mine = sectorOf(p ?? center, center, 4)
+  const offset = ((ph - mine * 90 + 540) % 360) - 180
+  safeQuadrant = (mine + (offset >= 0 ? 1 : 3)) % 4
+  for (let q = 0; q < 4; q++) {
+    Transform.getMutable(quadrants[q].pivot).position = Vector3.create(center.x, 0, center.z)
+    quadLook(q, q === safeQuadrant ? 'safe' : 'danger')
+  }
+  say(`THE BLIND SPOT  ·  run to the pale quadrant (${['north', 'east', 'south', 'west'][safeQuadrant]})`, ATTACKS.blindSpot.warning)
+}
+
+function updateBlindSpot(): boolean {
+  const b = ATTACKS.blindSpot
+  const t = state.time - startedAt
+  if (t >= b.warning && !blindPulsed) {
+    blindPulsed = true
+    const p = playerPos()
+    const inSafe = p ? sectorOf(p, center, 4, 6, safeQuadrant) === safeQuadrant || distXZ(p, center) < ARENA.daisRadius : true
+    if (!inSafe) damagePlayer(b.damage, 'the Blind Spot')
+    for (let q = 0; q < 4; q++) quadLook(q, q === safeQuadrant ? 'blind' : 'blast')
+    state.vulnerableUntil = state.time + b.vulnerability
+    say('HE CANNOT SEE YOU  ·  strike from the blind spot!', 2.5)
+  }
+  if (t >= b.warning + 0.35) for (let q = 0; q < 4; q++) if (q !== safeQuadrant) Transform.getMutable(quadrants[q].pivot).position = HIDDEN
+  if (t >= b.warning + b.vulnerability) {
+    endBlindSpot()
+    return true
+  }
+  return false
+}
+
+function endBlindSpot() {
+  for (const Q of quadrants) Transform.getMutable(Q.pivot).position = HIDDEN
+}
+
+// ---------------------------------------------------------------- Final Observation (phase III)
+let obsDanger: Entity | undefined
+const obsSafe: Entity[] = []
+let obsPulsed = false
+let obsLook = ''
+
+function ensureObservation() {
+  if (obsDanger) return
+  obsDanger = engine.addEntity()
+  Transform.create(obsDanger, { position: HIDDEN })
+  MeshRenderer.setCylinder(obsDanger)
+  const f = ATTACKS.finalObservation
+  for (let i = 0; i < 4; i++) {
+    const e = engine.addEntity()
+    Transform.create(e, { position: HIDDEN })
+    MeshRenderer.setCylinder(e)
+    glow(e, COLORS.ivory, 0.45, 2)
+    obsSafe.push(e)
+  }
+  void f
+}
+
+function safeCenters(): { x: number; z: number }[] {
+  const f = ATTACKS.finalObservation
+  const r = ARENA.playableRadius * f.safeRingFraction
+  return [0, 90, 180, 270].map((d) => ({ x: center.x + Math.sin((d * Math.PI) / 180) * r, z: center.z + Math.cos((d * Math.PI) / 180) * r }))
+}
+
+function startObservation() {
+  ensureObservation()
+  obsPulsed = false
+  obsLook = ''
+  const f = ATTACKS.finalObservation
+  const d = ARENA.playableRadius * 2
+  const tr = Transform.getMutable(obsDanger!)
+  tr.position = Vector3.create(center.x, 0.09, center.z)
+  tr.scale = Vector3.create(d, 0.01, d)
+  safeCenters().forEach((c, i) => {
+    const s = Transform.getMutable(obsSafe[i])
+    s.position = Vector3.create(c.x, 0.1, c.z)
+    s.scale = Vector3.create(f.safeRadius * 2, 0.012, f.safeRadius * 2)
+  })
+  say('THE FINAL OBSERVATION  ·  stand in a pale circle', f.warning)
+}
+
+function setObsLook(look: 'warn' | 'blast') {
+  if (obsLook === look || !obsDanger) return
+  obsLook = look
+  glow(obsDanger, COLORS.dangerCrimson, look === 'warn' ? 0.2 : 0.55, look === 'warn' ? 1.2 : 4)
+}
+
+function updateObservation(): boolean {
+  const f = ATTACKS.finalObservation
+  const t = state.time - startedAt
+  if (t < f.warning) {
+    setObsLook('warn')
+    return false
+  }
+  if (!obsPulsed) {
+    obsPulsed = true
+    setObsLook('blast')
+    const p = playerPos()
+    const safe = p ? safeCenters().some((c) => Math.hypot(p.x - c.x, p.z - c.z) <= f.safeRadius + 0.3) : true
+    if (!safe) damagePlayer(f.pulseDamage, 'the Final Observation')
+    state.windowOpenUntil = state.time + f.openWindow
+    say('HIS SIGHT IS OPEN  ·  Convergence from three sides, now!', 3)
+  }
+  if (t >= f.warning + 0.4) {
+    if (obsDanger) Transform.getMutable(obsDanger).position = HIDDEN
+    for (const e of obsSafe) Transform.getMutable(e).position = HIDDEN
+  }
+  if (t >= f.warning + f.openWindow + f.rest) {
+    endObservation()
+    return true
+  }
+  return false
+}
+
+function endObservation() {
+  if (obsDanger) Transform.getMutable(obsDanger).position = HIDDEN
+  for (const e of obsSafe) Transform.getMutable(e).position = HIDDEN
 }

@@ -1,6 +1,7 @@
 // Shared runtime state for the encounter. One object, reset in one place.
 import { BOSS, PLAYER } from '../config'
 import { Echo } from '../echoes/echoLogic'
+import { BossPhase, Stage } from './phaseRules'
 
 export type ShotLog = { kind: 'hit' | 'miss'; damage: number; assisted: boolean; at: number }
 export type ConvergenceLog = { count: number; hits: number; damage: number; sectors: number; at: number }
@@ -17,6 +18,18 @@ export const state = {
   endedAt: 0,
 
   bossHp: BOSS.maxHealth as number,
+  bossPhase: 1 as BossPhase,
+  stage: 'fight' as Stage,
+  stageStartedAt: 0,
+  /** Phase II Blind Spot vulnerability ends at this time. */
+  vulnerableUntil: 0,
+  /** Phase III Final Observation opening ends at this time. */
+  windowOpenUntil: 0,
+  /** Last time the barrier deflected a spell (for feedback). */
+  deflectAt: -10,
+  redirects: 0,
+  fourWay: 0,
+  phaseProgressAt: 0,
   playerHp: PLAYER.maxVitality as number,
   playerImmuneUntil: 0,
   playerHitAt: -10,
@@ -44,7 +57,10 @@ export const state = {
   /** The Watcher's spoken line (non-blocking subtitle). */
   subtitle: '' as string,
   subtitleUntil: 0,
-  saidLines: {} as Record<string, boolean>
+  saidLines: {} as Record<string, boolean>,
+  score: undefined as undefined | { total: number; grade: string; speed: number; vitality: number; perfect: number; redirect: number },
+  personalBest: 0,
+  newBest: false
 }
 
 export const isActive = () => state.phase === 'active'
@@ -60,15 +76,6 @@ export function speak(key: string, text: string, seconds = 3.5, once = true) {
   state.saidLines[key] = true
   state.subtitle = text
   state.subtitleUntil = state.time + seconds
-}
-
-export function damageBoss(amount: number): number {
-  if (!isActive()) return 0
-  const dmg = Math.max(0, Math.min(amount, state.bossHp))
-  if (dmg <= 0) return 0
-  state.bossHp -= dmg
-  state.bossFlashUntil = state.time + 0.12
-  return dmg
 }
 
 /** Damage the player once per attack event, honouring post-hit immunity. Returns damage dealt. */
@@ -90,6 +97,15 @@ export function resetState() {
   state.endReason = undefined
   state.endedAt = 0
   state.bossHp = BOSS.maxHealth
+  state.bossPhase = 1
+  state.stage = 'fight'
+  state.stageStartedAt = 0
+  state.vulnerableUntil = 0
+  state.windowOpenUntil = 0
+  state.deflectAt = -10
+  state.redirects = 0
+  state.fourWay = 0
+  state.phaseProgressAt = 0
   state.playerHp = PLAYER.maxVitality
   state.playerImmuneUntil = 0
   state.playerHitAt = -10
@@ -112,4 +128,6 @@ export function resetState() {
   state.subtitle = ''
   state.subtitleUntil = 0
   state.saidLines = {}
+  state.score = undefined
+  state.newBest = false
 }

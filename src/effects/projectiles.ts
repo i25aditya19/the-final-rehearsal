@@ -75,7 +75,7 @@ export function initProjectiles() {
  * Launch a spell from `from` to `to`. `onArrive` runs when it gets there (only in the same run).
  * `size` scales the visual (echo repeats are slightly smaller than direct casts).
  */
-export function launch(from: V3, to: V3, colorHex: string, hit: boolean, onArrive?: () => void, size = 1, speed = IMPRINT.projectileSpeed) {
+export function launch(from: V3, to: V3, colorHex: string, hit: boolean, onArrive?: () => void, size = 1, speed: number = IMPRINT.projectileSpeed) {
   let p = pool.find((x) => !x.active)
   if (!p) {
     // Pool exhausted: resolve the oldest immediately so no damage is ever lost.

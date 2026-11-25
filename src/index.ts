@@ -14,6 +14,8 @@ import { initAttacks } from './boss/attacks'
 import { initVfx } from './effects/vfx'
 import { initProjectiles } from './effects/projectiles'
 import { initAtmosphere } from './scene/atmosphere'
+import { initPhases } from './game/phases'
+import { initCorruption } from './boss/corruption'
 
 /** Single session clock. Runs first each frame; large hitches are clamped. */
 function clockSystem(dt: number) {
@@ -31,7 +33,9 @@ export function main() {
   initImprint()
   initEchoes()
   createEchoViews()
+  initPhases()
+  initCorruption()
   initAttacks()
   setupHud()
-  console.log('[FinalRehearsal] M3.5 loaded (bigger arena, projectiles, eye beam)')
+  console.log('[FinalRehearsal] M4 loaded (phases, corruption, Blind Spot, Final Observation)')
 }

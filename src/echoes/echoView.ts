@@ -1,6 +1,6 @@
 // Visuals for the four echo slots: a translucent cyan spectral sorcerer standing on a floor rune
 // that fills over the repeat cycle and turns gold inside the Convergence ready window.
-import { Entity, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { Entity, GltfContainer, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { COLORS, CONVERGENCE, ECHO } from '../config'
 import { headingDeg } from '../math/vec'
@@ -8,7 +8,10 @@ import { state } from '../game/state'
 import { timeToFire } from './echoLogic'
 
 type Look = 'idle' | 'ready' | 'fired' | 'corrupt'
-type View = { root: Entity; body: Entity; hood: Entity; fill: Entity; look: Look | ''; fillLook: string }
+type View = { root: Entity; body: Entity; hood: Entity; fill: Entity; model: Entity; look: Look | ''; fillLook: string }
+/** Aholo spectral sorcerer (cyan, translucent). The primitive body becomes a state-coloured aura. */
+const ECHO_MODEL = 'assets/echoes/spectral_echo.glb'
+const ECHO_MODEL_SCALE = 0.85
 const views: View[] = []
 const HIDDEN = Vector3.create(0, -20, 0)
 
@@ -62,7 +65,10 @@ export function createEchoViews() {
     MeshRenderer.setCylinder(arm, 0.5, 0.3)
     ghostMaterial(arm, COLORS.echoCyan, 0.55, 1.5)
 
-    views.push({ root, body, hood, fill, look: '', fillLook: '' })
+    const model = engine.addEntity()
+    Transform.create(model, { parent: root, position: Vector3.create(0, 1.1 * ECHO_MODEL_SCALE, 0), scale: Vector3.create(ECHO_MODEL_SCALE, ECHO_MODEL_SCALE, ECHO_MODEL_SCALE) })
+    GltfContainer.create(model, { src: ECHO_MODEL, visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+    views.push({ root, body, hood, fill, model, look: '', fillLook: '' })
   }
   engine.addSystem(echoViewSystem)
 }
@@ -87,8 +93,13 @@ function echoViewSystem() {
     if (look !== v.look) {
       const hex = look === 'corrupt' ? COLORS.dangerCrimson : look === 'ready' ? COLORS.syncGold : COLORS.echoCyan
       const glow = look === 'fired' ? 4 : look === 'ready' ? 2.2 : 1.2
-      ghostMaterial(v.body, hex, look === 'fired' ? 0.7 : 0.42, glow)
-      ghostMaterial(v.hood, hex, look === 'fired' ? 0.75 : 0.5, glow)
+      // With the model present, the primitive figure is a faint aura showing the echo's state;
+      // a corrupted echo hides the cyan model and shows a solid crimson figure instead.
+      const aura = look === 'corrupt' ? 0.6 : look === 'fired' ? 0.32 : look === 'ready' ? 0.24 : 0.08
+      ghostMaterial(v.body, hex, aura, glow)
+      ghostMaterial(v.hood, hex, aura, glow)
+      const k = look === 'corrupt' ? 0 : ECHO_MODEL_SCALE
+      Transform.getMutable(v.model).scale = Vector3.create(k, k, k)
       v.look = look
     }
 

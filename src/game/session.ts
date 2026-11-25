@@ -3,6 +3,7 @@
 import { InputAction, PointerEventType, PointerLock, engine, inputSystem } from '@dcl/sdk/ecs'
 import { SESSION } from '../config'
 import { EndReason, isActive, resetState, speak, state } from './state'
+import { masteryScore } from './phaseRules'
 
 type ResetHook = () => void
 const resetHooks: ResetHook[] = []
@@ -33,7 +34,12 @@ export function endRun(reason: EndReason) {
   state.phase = reason === 'boss' ? 'victory' : 'defeat'
   state.endReason = reason
   state.endedAt = state.time
-  if (reason === 'boss') speak('victory', 'A moment I could not foresee...', 5, false)
+  if (reason === 'boss') {
+    speak('victory', 'A moment I could not foresee...', 5, false)
+    state.score = masteryScore(state.time, state.playerHp, state.fourWay, state.redirects)
+    state.newBest = state.score.total > state.personalBest
+    state.personalBest = Math.max(state.personalBest, state.score.total)
+  }
   else speak('defeat', 'Another moment for my collection.', 5, false)
   // Free the cursor so the results button can be clicked.
   const lock = PointerLock.getMutableOrNull(engine.CameraEntity)

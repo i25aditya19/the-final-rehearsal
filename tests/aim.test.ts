@@ -108,3 +108,14 @@ test('missed spells stop at the wall or the floor, never beyond range', () => {
   // Range caps it.
   near(stopDistance(v3(40, 1.3, 30), v3(0, 0, -1), c, 23, 5), 5)
 })
+
+import { segmentSphereT, pointSegmentDistance } from '../src/combat/aim'
+
+test('anchor sphere hit test and hostile-shot path distance', () => {
+  const t = segmentSphereT(v3(0, 1, 0), v3(0, 0, 1), v3(0, 1, 10), 0.8, 30)
+  assert.ok(t !== null)
+  near(t!, 9.2)
+  assert.equal(segmentSphereT(v3(0, 1, 0), v3(0, 0, 1), v3(2, 1, 10), 0.8, 30), null)
+  near(pointSegmentDistance(v3(1, 0, 5), v3(0, 0, 0), v3(0, 0, 10)), 1)
+  near(pointSegmentDistance(v3(0, 0, 12), v3(0, 0, 0), v3(0, 0, 10)), 2)
+})

@@ -4,10 +4,12 @@ import { InputAction, PointerEventType, PointerLock, PrimaryPointerInfo, Transfo
 import { Vector3 } from '@dcl/sdk/math'
 import { isMobile } from '@dcl/sdk/platform'
 import { ARENA, BOSS, COLORS, IMPRINT, UI } from '../config'
-import { computeShot, sectorOf } from './aim'
+import { computeShot, sectorOf, segmentSphereT } from './aim'
 import { bossHitVolume } from '../boss/watcher'
 import { launch } from '../effects/projectiles'
-import { damageBoss, isActive, state } from '../game/state'
+import { isActive, state } from '../game/state'
+import { hitBoss } from '../game/phases'
+import { corruptionAnchor, strikeAnchor } from '../boss/corruption'
 import { leaveEcho } from '../echoes/echoSystem'
 import { v3 } from '../math/vec'
 
@@ -69,12 +71,24 @@ function imprintSystem() {
 
   state.imprintReadyAt = state.time + IMPRINT.cooldown
   state.shots++
+
+  // A Stolen Moment's anchor takes priority over the boss; such casts leave no echo.
+  const anchor = corruptionAnchor()
+  if (anchor) {
+    const tA = segmentSphereT(castOrigin, shot.dir, anchor.center, anchor.radius, IMPRINT.range)
+    if (tA !== null && (!shot.hit || tA <= shot.distance + 0.01)) {
+      const at = { x: castOrigin.x + shot.dir.x * tA, y: castOrigin.y + shot.dir.y * tA, z: castOrigin.z + shot.dir.z * tA }
+      launch(castOrigin, at, COLORS.echoCyan, true, () => strikeAnchor())
+      return
+    }
+  }
+
   const assisted = shot.assisted
   launch(castOrigin, shot.end, COLORS.echoCyan, shot.hit, () => {
     if (shot.hit) {
-      const dmg = damageBoss(IMPRINT.directDamage)
+      const out = hitBoss('direct', IMPRINT.directDamage, undefined, shot.end)
       state.hits++
-      state.lastShot = { kind: 'hit', damage: dmg, assisted, at: state.time }
+      state.lastShot = { kind: 'hit', damage: out.damage, assisted, at: state.time }
     } else {
       state.lastShot = { kind: 'miss', damage: 0, assisted: false, at: state.time }
     }

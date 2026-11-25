@@ -48,6 +48,15 @@ elif mode == 'silver':
 elif mode == 'pale':
     ash = np.array([236, 234, 230], np.float32) / 236
     out = np.clip(lum * 1.08 + 8, 0, 255) * ash
+elif mode == 'stone':
+    # Environment: neutral grey stone, mids lifted so the chamber is not too dark.
+    l = lum / 255.0
+    l = np.clip(0.05 + 1.18 * l ** 0.88, 0, 1) * 255
+    out = l * np.array([0.98, 0.985, 1.0], np.float32)
+elif mode == 'cyan':
+    # Friendly spectral echo: luminance tinted toward #85DFFF.
+    l = np.clip(lum / 255.0 * 1.25 + 0.08, 0, 1)
+    out = l * np.array([133, 223, 255], np.float32)
 else:
     raise SystemExit('unknown mode')
 

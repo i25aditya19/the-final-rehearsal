@@ -149,3 +149,31 @@ export function stopDistance(origin: V3, dir: V3, center: V3, wallRadius: number
   if (dir.y < -1e-6) best = Math.min(best, -origin.y / dir.y)
   return Math.max(0, best)
 }
+
+/** First t in [0, maxT] where origin + dir * t enters a sphere, or null. `dir` normalized. */
+export function segmentSphereT(origin: V3, dir: V3, center: V3, radius: number, maxT: number): number | null {
+  const ox = origin.x - center.x
+  const oy = origin.y - center.y
+  const oz = origin.z - center.z
+  const b = ox * dir.x + oy * dir.y + oz * dir.z
+  const c = ox * ox + oy * oy + oz * oz - radius * radius
+  if (c <= 0) return 0
+  const disc = b * b - c
+  if (disc < 0) return null
+  const t = -b - Math.sqrt(disc)
+  return t >= 0 && t <= maxT ? t : null
+}
+
+/** Shortest distance from point p to the segment a-b. */
+export function pointSegmentDistance(p: V3, a: V3, b: V3): number {
+  const abx = b.x - a.x
+  const aby = b.y - a.y
+  const abz = b.z - a.z
+  const len2 = abx * abx + aby * aby + abz * abz
+  let t = len2 > 0 ? ((p.x - a.x) * abx + (p.y - a.y) * aby + (p.z - a.z) * abz) / len2 : 0
+  t = Math.max(0, Math.min(1, t))
+  const dx = a.x + abx * t - p.x
+  const dy = a.y + aby * t - p.y
+  const dz = a.z + abz * t - p.z
+  return Math.sqrt(dx * dx + dy * dy + dz * dz)
+}

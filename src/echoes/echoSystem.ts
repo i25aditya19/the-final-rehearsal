@@ -6,7 +6,8 @@ import { bossHitVolume } from '../boss/watcher'
 import { spawnTracer } from '../effects/tracers'
 import { launch } from '../effects/projectiles'
 import { burst } from '../effects/vfx'
-import { damageBoss, isActive, say, speak, state } from '../game/state'
+import { isActive, say, speak, state } from '../game/state'
+import { hitBoss } from '../game/phases'
 import { V3, headingDeg, sub, v3 } from '../math/vec'
 import { Echo, EchoRules, convergenceDamage, placeEcho, readyGroup, scheduleNext } from './echoLogic'
 
@@ -49,7 +50,7 @@ function echoSystem() {
     if (e.corrupted || state.time < e.nextFire) continue
     const shot = resolveShot(e.origin, e.dir, bossHitVolume(), IMPRINT.range, false, BOUNDS)
     launch(e.origin, shot.end, COLORS.echoCyan, shot.hit, () => {
-      if (shot.hit) damageBoss(IMPRINT.echoDamage)
+      if (shot.hit) hitBoss('echo', IMPRINT.echoDamage, undefined, shot.end)
     }, 0.8)
     if (state.echoRepeats === 0) speak('firstEcho', 'There you are. Again.')
     state.echoRepeats++
@@ -98,13 +99,25 @@ function tryConvergence() {
     spawnTracer(v3(a.pos.x, 0.3, a.pos.z), v3(b.pos.x, 0.3, b.pos.z), COLORS.syncGold, false, { width: 0.1, seconds: 1.1, intensity: 4 })
   }
 
-  const damage = damageBoss(convergenceDamage(hits, CONVERGENCE.damageByCount, IMPRINT.echoDamage))
+  const out = hitBoss('convergence', convergenceDamage(hits, CONVERGENCE.damageByCount, IMPRINT.echoDamage), { hits, sectors: hitSectors.size }, { x: ARENA.center.x, y: 4, z: ARENA.center.z })
+  const damage = Math.round(out.damage)
+  if (hits >= 4 && hitSectors.size >= 4 && (out.damage > 0 || out.gateBroken)) state.fourWay++
   state.convergenceReadyAt = state.time + CONVERGENCE.cooldown
   state.convergences++
   state.lastConvergence = { count: group.length, hits, damage, sectors: hitSectors.size, at: state.time }
   state.bestConvergence = Math.max(state.bestConvergence, hits)
   if (hits >= 2) speak('firstSync', 'You are learning things you were never meant to know.')
-  if (hits >= 2) say(`${hits}-WAY CONVERGENCE  ·  ${damage} damage  ·  ${hitSectors.size} sector${hitSectors.size === 1 ? '' : 's'}`, 2.5)
+  if (out.gateBroken) say(`${hits}-WAY CONVERGENCE  ·  THE BARRIER SHATTERS`, 3)
+  else if (out.deflected && hits >= 2) say(convergenceAdvice(hits, hitSectors.size), 3)
+  else if (hits >= 2) say(`${hits}-WAY CONVERGENCE  ·  ${damage} damage  ·  ${hitSectors.size} sector${hitSectors.size === 1 ? '' : 's'}`, 2.5)
   else if (hits === 1) say('Convergence: only one beam reached The Watcher')
   else say('Convergence missed: echoes must face The Watcher')
+}
+
+/** Why a Convergence was blocked, in the player's terms. */
+function convergenceAdvice(hits: number, sectors: number): string {
+  if (state.stage === 'gate' && state.bossPhase === 2) return `Blocked: need 3 echoes from 3 sides (you had ${hits} from ${sectors})`
+  if (state.bossPhase === 3 && state.time >= state.windowOpenUntil) return 'Blocked: wait for his sight to open (gold barrier)'
+  if (state.bossPhase === 3) return `Blocked: need 3+ echoes from 3+ sides (you had ${hits} from ${sectors})`
+  return 'Blocked by the barrier'
 }
