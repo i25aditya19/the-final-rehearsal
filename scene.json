@@ -1,0 +1,68 @@
+{
+  "ecs7": true,
+  "runtimeVersion": "7",
+  "display": {
+    "title": "The Final Rehearsal",
+    "description": "Every spell leaves a trace. Every trace is being watched. A five-minute final boss fight against The Watcher, where your own spell echoes become your weapon.",
+    "navmapThumbnail": "images/scene-thumbnail.png",
+    "favicon": "favicon_asset"
+  },
+  "owner": "",
+  "contact": {
+    "name": "The Final Rehearsal team",
+    "email": ""
+  },
+  "main": "bin/index.js",
+  "tags": [
+    "game"
+  ],
+  "scene": {
+    "parcels": [
+      "0,0",
+      "0,1",
+      "0,2",
+      "1,0",
+      "1,1",
+      "1,2",
+      "2,0",
+      "2,1",
+      "2,2"
+    ],
+    "base": "0,0"
+  },
+  "spawnPoints": [
+    {
+      "name": "arena-south",
+      "default": true,
+      "position": {
+        "x": [
+          23,
+          25
+        ],
+        "y": [
+          0,
+          0
+        ],
+        "z": [
+          12,
+          13
+        ]
+      },
+      "cameraTarget": {
+        "x": 24,
+        "y": 3,
+        "z": 24
+      }
+    }
+  ],
+  "featureToggles": {
+    "voiceChat": "enabled",
+    "portableExperiences": "enabled"
+  },
+  "worldConfiguration": {
+    "name": "rgl10.dcl.eth",
+    "skyboxConfig": {
+      "fixedTime": 79200
+    }
+  }
+}
