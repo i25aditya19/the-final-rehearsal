@@ -16,6 +16,7 @@ import { initProjectiles } from './effects/projectiles'
 import { initAtmosphere } from './scene/atmosphere'
 import { initPhases } from './game/phases'
 import { initCorruption } from './boss/corruption'
+import { initChamber } from './scene/chamber'
 
 /** Single session clock. Runs first each frame; large hitches are clamped. */
 function clockSystem(dt: number) {
@@ -26,6 +27,7 @@ export function main() {
   engine.addSystem(clockSystem, 200000, "clock") // higher priority runs first (regular = 100000)
   initSession()
   initAtmosphere()
+  initChamber()
   initVfx()
   createWatcher()
   createTracerPool()

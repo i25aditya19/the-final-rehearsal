@@ -94,6 +94,13 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - HUD: phase name and BARRIER state in the boss bar, always-visible objective line, stuck-at-gate hints after 8 s, specific "why was this blocked" messages.
 - Echo ghosts now use the Aholo spectral sorcerer model; the primitive figure is a state aura (gold when ready, flash when firing, solid crimson when corrupted).
 
+## Chamber of Unforgotten Moments (2026-11-25)
+
+- 7 new Aholo models audited (`tex_mesh_4` was uploaded twice, identical): spectral echo, astronomical rings, door, arch, window, pillar, candle, clock; 278k-532k triangles each, 2048² PNG textures, Y-up, +Z front, centred origins, metres; door/window/clock had bronze-brown tones. Optimized with the same pipeline (UV-aware permissive decimation, about 1 % error), recoloured to stone/silver/ivory (echo cyan), all pass glTF validation. A grey translucent `wall_silhouette` variant of the echo model represents past sorcerers.
+- Layout (static, in `main.composite` via `npm run arena`): 12 Aholo pillars (13 m) + 12 arches (13.5 m) on a 24.8 m ring, 7 stained-glass windows behind the arches, 4 silhouettes in the other archways, the grand door at the south entrance behind the spawn, 16 m outer wall with cornice, astronomical clock (8.4 m) high on the north wall, floor engravings (48 ticks, 12 star marks). Pillar collision = invisible cylinders; arches, windows, door, clock have no colliders. The 20 m combat floor has no obstacles.
+- Animated (`src/scene/chamber.ts`): two astronomical ring mechanisms overhead (19 m and 11 m, counter-rotating), 24 floating candles bobbing with flickering flames.
+- **Budget check**: model triangles 143.6k (limit 250k for 25 parcels), about 300 composite entities, assets 4 MB (World budget about 100 MB). Checked with `scripts/asset-pipeline/chamber_render.py` section renders, not in the client yet.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
@@ -108,4 +115,4 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 
 ## Next step
 
-Creator: playtest M2+M3 together (echo/Convergence feel, Gaze sidestep, Aftershock jump vs gaps, retry), plus the Watcher model look and triangle count. Confirm Aholo redistribution terms so the models can be committed. Then M4: phases, gates, corruption, Blind Spot, Final Observation.
+Creator: full playtest in Chrome and the Desktop Client (whole fight, all phases, corruption, Blind Spot, Final Observation, retry), screenshots of the chamber, FPS and triangle stats. Next: M5/M6 polish: sound and music, mask/halo shattering victory cinematic, phase-transformation effects, attack anticipation animation, tuning from playtest results.

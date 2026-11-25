@@ -35,6 +35,7 @@ const TransformC = component('core::Transform')
 const MeshC = component('core::MeshRenderer')
 const MaterialC = component('core::Material')
 const ColliderC = component('core::MeshCollider')
+const GltfC = component('core::GltfContainer')
 const NodesC = component('inspector::Nodes')
 
 // ---- remove previous arena entities -------------------------------------------------------
@@ -64,7 +65,9 @@ function quatY(deg: number) {
 
 type Spec = {
   name: string
-  mesh: 'box' | 'cylinder'
+  mesh: 'box' | 'cylinder' | 'none'
+  /** GLB model instead of a primitive (no mesh colliders: use simple primitives for collision). */
+  gltf?: string
   pos: [number, number, number]
   scale: [number, number, number]
   rotY?: number
@@ -93,18 +96,23 @@ function make(spec: Spec): number {
       parent: spec.parent
     }
   }
-  MeshC.data[id] = {
-    json: { mesh: spec.mesh === 'box' ? { $case: 'box', box: { uvs: [] } } : { $case: 'cylinder', cylinder: { radiusTop: 0.5, radiusBottom: 0.5 } } }
+  if (spec.gltf) {
+    GltfC.data[id] = { json: { src: spec.gltf, visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 } }
+  } else if (spec.mesh !== 'none') {
+    MeshC.data[id] = {
+      json: { mesh: spec.mesh === 'box' ? { $case: 'box', box: { uvs: [] } } : { $case: 'cylinder', cylinder: { radiusTop: 0.5, radiusBottom: 0.5 } } }
+    }
+    const pbr: Json = { albedoColor: hex(spec.color), metallic: 0, roughness: 0.85 }
+    if (spec.emissive) {
+      const c = hex(spec.color)
+      pbr.emissiveColor = { r: c.r, g: c.g, b: c.b }
+      pbr.emissiveIntensity = spec.emissive
+    }
+    MaterialC.data[id] = { json: { material: { $case: 'pbr', pbr } } }
   }
-  const pbr: Json = { albedoColor: hex(spec.color), metallic: 0, roughness: 0.85 }
-  if (spec.emissive) {
-    const c = hex(spec.color)
-    pbr.emissiveColor = { r: c.r, g: c.g, b: c.b }
-    pbr.emissiveIntensity = spec.emissive
-  }
-  MaterialC.data[id] = { json: { material: { $case: 'pbr', pbr } } }
   if (spec.collider === 2) {
     ColliderC.data[id] = { json: { collisionMask: 2, mesh: spec.mesh === 'box' ? { $case: 'box', box: {} } : { $case: 'cylinder', cylinder: { radiusTop: 0.5, radiusBottom: 0.5 } } } }
+    if (spec.mesh === 'none') throw new Error('collider needs a primitive shape')
   }
   addNode(id, spec.parent)
   return id
@@ -213,23 +221,84 @@ for (let i = 0; i < segments; i++) {
   })
 }
 
-// Pillars: tall columns behind the wall with a capital and a candle flame (gothic placeholder
-// until the modular chamber kit; see GAME_DESIGN 13).
+// ---------------------------------------------------------------- Chamber of Unforgotten Moments
+// Aholo models (optimized copies in assets/environment). Model origins are at their centres,
+// +Z is the front. Every architectural piece faces the arena centre. Collision uses simple
+// invisible primitives, never the meshes.
+const ENV = 'assets/environment/'
+const ring = wallR + 1.8 // pillar/arch circle
+const faceCentre = (deg: number) => deg + 180
+const DOOR_DEG = 180 // grand entrance behind the south spawn
 const pillarCount = 12
+
+// Floor: astronomical engravings (zodiac ticks and twelve star marks).
+for (let i = 0; i < 48; i++) {
+  const deg = i * 7.5
+  const rad = (deg * Math.PI) / 180
+  const major = i % 4 === 0
+  make({ name: `${PREFIX}/Tick ${i}`, mesh: 'box', pos: [Math.sin(rad) * (R - 0.9), y + 0.003, Math.cos(rad) * (R - 0.9)], scale: [0.07, 0.01, major ? 1.2 : 0.55], rotY: deg, color: LINE, emissive: 0.2, parent: root })
+}
+for (let i = 0; i < 12; i++) {
+  const deg = i * 30 + 15
+  const rad = (deg * Math.PI) / 180
+  const r = R * 0.62
+  make({ name: `${PREFIX}/Star ${i}`, mesh: 'box', pos: [Math.sin(rad) * r, y + 0.003, Math.cos(rad) * r], scale: [0.42, 0.01, 0.42], rotY: deg + 45, color: COLORS.ash, emissive: 0.3, parent: root })
+}
+
 for (let i = 0; i < pillarCount; i++) {
   const deg = i * (360 / pillarCount) + 15
   const rad = (deg * Math.PI) / 180
-  const r = wallR + 1.6
-  const x = Math.sin(rad) * r
-  const z = Math.cos(rad) * r
-  make({ name: `${PREFIX}/Pillar ${i}`, mesh: 'cylinder', pos: [x, 7, z], scale: [1.6, 14, 1.6], color: COLORS.charcoal, collider: 2, parent: root })
-  make({ name: `${PREFIX}/Pillar base ${i}`, mesh: 'cylinder', pos: [x, 0.4, z], scale: [2.3, 0.8, 2.3], color: COLORS.stone, parent: root })
-  make({ name: `${PREFIX}/Pillar capital ${i}`, mesh: 'cylinder', pos: [x, 14.2, z], scale: [2.3, 0.5, 2.3], color: COLORS.stone, parent: root })
-  // Candle on a bracket facing the arena.
-  const cr = r - 1.25
-  make({ name: `${PREFIX}/Candle ${i}`, mesh: 'cylinder', pos: [Math.sin(rad) * cr, 4.2, Math.cos(rad) * cr], scale: [0.22, 0.7, 0.22], color: COLORS.ivory, parent: root })
-  make({ name: `${PREFIX}/Candle flame ${i}`, mesh: 'cylinder', pos: [Math.sin(rad) * cr, 4.7, Math.cos(rad) * cr], scale: [0.1, 0.25, 0.1], color: '#FFE2B0', emissive: 4, parent: root })
+  const x = Math.sin(rad) * ring
+  const z = Math.cos(rad) * ring
+  // gothic_pillar: 2.4 m tall model -> 13.2 m.
+  make({ name: `${PREFIX}/Pillar ${i}`, mesh: 'none', gltf: ENV + 'gothic_pillar.glb', pos: [x, 6.6, z], scale: [5.5, 5.5, 5.5], rotY: faceCentre(deg), color: '', parent: root })
+  make({ name: `${PREFIX}/Pillar collider ${i}`, mesh: 'cylinder', pos: [x, 6.6, z], scale: [3.2, 13.2, 3.2], color: '', collider: 2, parent: root })
 }
+// Delete the visual of the collider-only cylinders (keep their colliders).
+for (const [id, v] of Object.entries(NameC.data) as [string, Json][]) {
+  if (String(v.json.value).startsWith(`${PREFIX}/Pillar collider`)) {
+    delete MeshC.data[id]
+    delete MaterialC.data[id]
+  }
+}
+
+for (let i = 0; i < pillarCount; i++) {
+  const deg = i * (360 / pillarCount)
+  const rad = (deg * Math.PI) / 180
+  const x = Math.sin(rad) * ring
+  const z = Math.cos(rad) * ring
+  if (deg === DOOR_DEG) {
+    // Grand entrance: chamber_door (3.5 m model -> 10.5 m) inside an arch frame.
+    const dr = ring + 2.2
+    make({ name: `${PREFIX}/Grand door`, mesh: 'none', gltf: ENV + 'chamber_door.glb', pos: [Math.sin(rad) * dr, 5.25, Math.cos(rad) * dr], scale: [3, 3, 3], rotY: faceCentre(deg), color: '', parent: root })
+  }
+  // gothic_arch: 4.5 m model -> 13.5 m, spanning the gap between pillars.
+  make({ name: `${PREFIX}/Arch ${i}`, mesh: 'none', gltf: ENV + 'gothic_arch.glb', pos: [x, 6.75, z], scale: [3, 3, 3], rotY: faceCentre(deg), color: '', parent: root })
+  if (deg !== DOOR_DEG && i % 3 !== 1) {
+    // Monochrome stained glass behind the arch (4 m model -> 10.4 m), softly self-lit.
+    const wr = ring + 2.6
+    make({ name: `${PREFIX}/Window ${i}`, mesh: 'none', gltf: ENV + 'gothic_window.glb', pos: [Math.sin(rad) * wr, 6.2, Math.cos(rad) * wr], scale: [2.6, 2.6, 2.6], rotY: faceCentre(deg), color: '', parent: root })
+  } else if (deg !== DOOR_DEG) {
+    // Spectral silhouettes of past sorcerers, frozen in their final spells (distinct from echoes:
+    // grey, translucent, set back in the archways).
+    const sr = ring + 1.4
+    make({ name: `${PREFIX}/Silhouette ${i}`, mesh: 'none', gltf: ENV + 'wall_silhouette.glb', pos: [Math.sin(rad) * sr, 2.9, Math.cos(rad) * sr], scale: [2.6, 2.6, 2.6], rotY: faceCentre(deg), color: '', parent: root })
+  }
+}
+
+// Outer wall: tall dark masonry closing the chamber behind arches and windows.
+const outerR = ring + 3.4
+const outerSegs = 36
+const outerLen = 2 * outerR * Math.tan(Math.PI / outerSegs) + 0.2
+for (let i = 0; i < outerSegs; i++) {
+  const deg = (i + 0.5) * (360 / outerSegs)
+  const rad = (deg * Math.PI) / 180
+  make({ name: `${PREFIX}/Outer wall ${i}`, mesh: 'box', pos: [Math.sin(rad) * outerR, 8, Math.cos(rad) * outerR], scale: [outerLen, 16, 0.8], rotY: deg, color: '#1A1A1A', parent: root })
+  make({ name: `${PREFIX}/Cornice ${i}`, mesh: 'box', pos: [Math.sin(rad) * (outerR - 0.6), 15.4, Math.cos(rad) * (outerR - 0.6)], scale: [outerLen, 0.6, 1.6], rotY: deg, color: COLORS.stone, parent: root })
+}
+
+// Astronomical clock high on the north wall, facing the arena (0.6 m model -> 8.4 m).
+make({ name: `${PREFIX}/Astronomical clock`, mesh: 'none', gltf: ENV + 'astro_clock.glb', pos: [0, 21.5, outerR - 1.2], scale: [14, 14, 14], rotY: 180, color: '', parent: root })
 
 writeFileSync(COMPOSITE, JSON.stringify(composite, null, 2) + '\n')
 console.log(`Arena written: ${nextId - root} entities (ids ${root}..${nextId - 1}), playable radius ${R} m, wall at ${wallR} m`)
