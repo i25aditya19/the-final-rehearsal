@@ -61,6 +61,12 @@ export const state = {
   subtitle: '' as string,
   subtitleUntil: 0,
   saidLines: {} as Record<string, boolean>,
+  /** Survive retries: defeats this session and the opt-in guided mode. */
+  defeats: 0,
+  assist: false,
+  /** Hits landed during a Blind Spot opening (for the 'The Unseen' achievement). */
+  blindHits: 0,
+  achievements: [] as string[],
   score: undefined as undefined | { total: number; grade: string; speed: number; vitality: number; perfect: number; redirect: number },
   personalBest: 0,
   newBest: false
@@ -84,7 +90,7 @@ export function speak(key: string, text: string, seconds = 3.5, once = true) {
 /** Damage the player once per attack event, honouring post-hit immunity. Returns damage dealt. */
 export function damagePlayer(amount: number, source: string): number {
   if (!isActive() || state.time < state.playerImmuneUntil) return 0
-  const dmg = Math.max(0, Math.min(amount, state.playerHp))
+  const dmg = Math.max(0, Math.min(amount * (state.assist ? 0.7 : 1), state.playerHp))
   state.playerHp -= dmg
   state.damageTaken += dmg
   state.playerImmuneUntil = state.time + PLAYER.postHitImmunity
@@ -134,5 +140,7 @@ export function resetState() {
   state.subtitleUntil = 0
   state.saidLines = {}
   state.score = undefined
+  state.blindHits = 0
+  state.achievements = []
   state.newBest = false
 }

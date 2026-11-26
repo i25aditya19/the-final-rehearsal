@@ -104,8 +104,8 @@ export const IMPRINT = {
 export const UI = {
   /** Draw a small scene crosshair while the cursor is locked. */
   showCrosshair: true,
-  /** Show the M1 debug line (last shot, sector, position). */
-  showDebug: true
+  /** Development aids: debug line, F refills the boss, 1 swaps mask/helm. Off for release. */
+  showDebug: false
 } as const
 
 export const ECHO = {

@@ -2,6 +2,7 @@
 // This system only OBSERVES game state and plays the matching cue, so gameplay code stays
 // untouched. Every important cue also has a visual (GAME_DESIGN 11).
 import { AudioSource, Entity, Transform, engine } from '@dcl/sdk/ecs'
+import { readyWindow } from '../game/assist'
 import { Vector3 } from '@dcl/sdk/math'
 import { CONVERGENCE } from '../config'
 import { state } from '../game/state'
@@ -64,7 +65,7 @@ function audioSystem(dt: number) {
   // Player magic
   if (s.shots > prev.shots) sfx('cast', 0.8)
   if (s.echoRepeats > prev.echoRepeats) sfx('echo', 0.45, 0.15)
-  const ready = readyGroup(s.echoes, s.time, CONVERGENCE.readyWindow).length
+  const ready = readyGroup(s.echoes, s.time, readyWindow()).length
   if (ready >= 2 && prev.ready < 2 && s.time >= s.convergenceReadyAt) sfx('ready', 0.5, 0.5)
   if (s.convergences > prev.convergences && s.lastConvergence) {
     const n = Math.min(4, s.lastConvergence.hits)

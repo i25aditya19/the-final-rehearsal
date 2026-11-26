@@ -317,7 +317,8 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
     if (!frozen) haloAngle[i] = (haloAngle[i] + speed * dt) % 360
     const wobble = phase >= 2 ? 6 + 4 * phase : 3
     ht.rotation = Quaternion.fromEulerDegrees(h.tilt + Math.sin(t * 0.4 + i) * wobble, Math.sin(t * 0.3 + i * 2) * (wobble + 1), haloAngle[i])
-    let k = haloBase[i] * (phase === 3 ? 1.2 : 1)
+    const intro = Math.min(1, state.time / 2.5)
+    let k = haloBase[i] * (phase === 3 ? 1.2 : 1) * (0.5 + 0.5 * intro)
     if (frozen && te > 1.6) {
       // break: swell outward then vanish, one ring after another
       const p = Math.min(1, Math.max(0, (te - 1.6 - i * 0.18) / 0.9))
@@ -355,7 +356,7 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
     }
     if (eyeLight) {
       const l = LightSource.getMutable(eyeLight)
-      l.intensity = (phase === 3 ? 4200 : 2200) * (1 + 1.5 * a)
+      l.intensity = (phase === 3 ? 4200 : 2200) * (1 + 1.5 * a) * Math.min(1, state.time / 2)
     }
   } else if (shattered && eyeOrb) {
     Transform.getMutable(eyeOrb).scale = Vector3.Zero()

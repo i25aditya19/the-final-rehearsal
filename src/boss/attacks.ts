@@ -8,6 +8,8 @@ import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
 import { distXZ, headingDeg, sub, v3 } from '../math/vec'
 import { damagePlayer, isActive, say, state } from '../game/state'
 import { corruptionReady, startCorruption, updateCorruption } from './corruption'
+import { withWarn } from '../game/assist'
+import { autoCull, setShown } from '../effects/visibility'
 import { pointSegmentDistance, sectorOf } from '../combat/aim'
 import { watcherEyePosition } from './watcher'
 import { setSparks } from '../effects/vfx'
@@ -79,9 +81,11 @@ function tele(file: string, parent?: Entity, y = 0.08): Entity {
 }
 const show = (e: Entity, sx: number, sy: number, sz: number) => {
   Transform.getMutable(e).scale = Vector3.create(sx, sy, sz)
+  setShown(e, true)
 }
 const hide = (e: Entity) => {
   Transform.getMutable(e).scale = Vector3.Zero()
+  setShown(e, false)
 }
 
 export function initAttacks() {
@@ -110,6 +114,7 @@ export function initAttacks() {
     safeLanes.push(e)
   }
 
+  autoCull(gazeBeam, gazeBeamGlow, ...safeLanes)
   engine.addSystem(attackSystem)
   onReset(resetAttacks)
 }
@@ -146,6 +151,16 @@ function nextKind(): AttackKind | undefined {
     sequenceIndex = 0
   }
   const seq = SEQUENCES[phase]
+  // Variation: after the first pass the order is reshuffled (the first attack stays first), so
+  // repeated runs differ without unfair surprises.
+  if (sequenceIndex > 0 && sequenceIndex % seq.length === 0) {
+    for (let i = seq.length - 1; i > 1; i--) {
+      const j = 1 + Math.floor(Math.random() * i)
+      const tmp = seq[i]
+      seq[i] = seq[j]
+      seq[j] = tmp
+    }
+  }
   for (let tries = 0; tries < seq.length; tries++) {
     const kind = seq[sequenceIndex++ % seq.length]
     if (state.stage === 'gate' && !GATE_ALLOWED.includes(kind)) continue
@@ -253,7 +268,7 @@ function aimBeam(heading: number, width: number) {
 }
 
 function updateGaze(): boolean {
-  const g = ATTACKS.gaze
+  const g = withWarn(ATTACKS.gaze)
   const t = state.time - startedAt
   const p = playerPos()
   const trackEnd = g.warning - g.lockedAim
@@ -428,7 +443,7 @@ function startBlindSpot() {
 }
 
 function updateBlindSpot(): boolean {
-  const b = ATTACKS.blindSpot
+  const b = withWarn(ATTACKS.blindSpot)
   const t = state.time - startedAt
   if (t >= b.warning && !blindPulsed) {
     blindPulsed = true
@@ -494,7 +509,7 @@ function setObsLook(look: 'warn' | 'blast') {
 }
 
 function updateObservation(): boolean {
-  const f = ATTACKS.finalObservation
+  const f = withWarn(ATTACKS.finalObservation)
   const t = state.time - startedAt
   if (t < f.warning) {
     setObsLook('warn')
@@ -551,8 +566,8 @@ function ensureVolley() {
   for (let i = 0; i < v.waves * v.boltsPerWave; i++) {
     const e = engine.addEntity()
     Transform.create(e, { position: HIDDEN, scale: Vector3.create(0.42, 0.42, 0.42) })
-    MeshRenderer.setSphere(e)
-    glow(e, '#FF5A72', 1, 5)
+    GltfContainer.create(e, { src: 'assets/fx/orb_crimson.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+    setShown(e, false)
     bolts.push({ e, active: false, x: 0, z: 0, dx: 0, dz: 0, px: 0, pz: 0 })
   }
   volleyWarn = tele('disc_crimson.glb')
@@ -581,6 +596,7 @@ function launchWave(w: number) {
     b.z = center.z + b.dz * (ARENA.daisRadius - 1)
     b.px = b.x
     b.pz = b.z
+    setShown(b.e, true)
   }
 }
 
@@ -611,6 +627,7 @@ function updateVolley(): boolean {
     if (Math.hypot(b.x - center.x, b.z - center.z) > ARENA.playableRadius + ARENA.borderMargin) {
       b.active = false
       Transform.getMutable(b.e).position = HIDDEN
+      setShown(b.e, false)
       continue
     }
     anyActive = true
@@ -635,6 +652,7 @@ function endVolley() {
   for (const b of bolts) {
     b.active = false
     Transform.getMutable(b.e).position = HIDDEN
+    setShown(b.e, false)
   }
   if (volleyWarn) hide(volleyWarn)
 }

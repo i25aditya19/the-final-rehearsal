@@ -121,6 +121,24 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 - Floating damage numbers (gold for Convergence-sized hits) and "DEFLECTED".
 - **Headless playtest** (`npm run sim`): runs the real scene in Node with novice/average/skilled bots. Latest: every run wins; 136-160 s; phase I ends about 25 s, phase II about 52 s; damage taken mostly from the Gaze (novice) and the Volley; Stolen Moment always protected by the bots. Bots know the optimal plan, so these are lower bounds: real first-timers will be slower. **Difficulty deliberately not raised until a human playtest.**
 
+## Premium polish pass (2026-11-26)
+
+Checkpoint before this pass: branch `checkpoint-before-polish` (cc0ab0a). Hitboxes, attack timings, damage, boss health and phase logic are unchanged in normal mode (43 tests pass; sim results match the previous pass).
+
+- **Chamber**: dark charcoal astronomical marble floor (moons, zodiac ring, stars, central eye emblem, faint gameplay rings and quadrant lines); carved lower parapet with pointed-arch panels replaces the plain wall; dark carved cornices with thin silver fillets; ribbed starmap vault; architecture retoned matte with recomputed normals (no foil look); 24 candles with flames, 12 drifting books, 26 twinkling vault stars; readable astronomical clock face-down above the arena with counter-rotating rings.
+- **Watcher**: ivory mask from the start, silver-embroidered robes, a real crimson eye (orb + point light that ignites on entry and burns hotter in phase III), halos set behind the head so they no longer intersect; entrance title card and halo ignition.
+- **Echoes**: materialise (rise, grow, cyan flare) and dissolve when replaced; aim lines showing where each echo will fire (cyan, gold when ready, crimson when stolen).
+- **Teaching and assists**: quadrant compass on the HUD; pulsing "PRESS E · CONVERGENCE" until the first Convergence; redirect marker for the first two Stolen Moments; after 2 defeats the results screen offers **Rehearse with guidance** (longer Convergence window, +0.45 s warnings, gates need 2 quadrants, 70 % damage taken; marked GUIDED on the HUD).
+- **Feel**: Watcher voice lines (taunts, gate break, redirect, four-way, low health), cast flare, transition gold burst, full-screen Convergence edge glow, attack order reshuffled after the first pass (first attack fixed), six achievements on the results screen (Prodigy, Untouchable, Perfect Harmony, The Unseen, Usurper, Master of Moments).
+- **UI**: Gothic HUD (serif titles, thin silver borders, dark panels, phase names on the boss bar). Debug line and debug keys (F, 1) off by default (`UI.showDebug`).
+- **Performance**:
+  - Composite: 157 → 85 entities; 104 box primitives → 0 rendered (44 invisible colliders).
+  - Runtime spheres 59 → 7 (projectiles, volley bolts, flames, shards and stars use shared 80-triangle orb GLBs).
+  - Pooled effects are now hidden with `VisibilityComponent` (`src/effects/visibility.ts`): 78 of 79 runtime primitives and 18 GLBs are culled at rest, where before 148 parked primitives were still sent to the renderer.
+  - The placeholder Watcher (46 primitives) is deleted once the models load.
+  - Estimated GLB triangles: about 166k at rest; lights 8, particle emitters 8 (mobile budgets).
+  - The 29 FPS / 235,871 triangle figure was measured by the creator before this pass; **it has not been re-measured in the client**.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
@@ -135,4 +153,4 @@ Target: working deploy by 29 Nov, final deploy with margin before the deadline.
 
 ## Next step
 
-Creator: one full human playtest (time, deaths, confusion points, sound mix), Desktop Client check, FPS. Then: tuning from that data, two-visitor isolation test, remove debug keys (F, 1), submission page text, trailer shots, deploy to rgl10.dcl.eth (creator signs) by 29 Nov.
+Creator: one full human playtest (time, deaths, confusion points, sound mix), Desktop Client check, FPS. Then: tuning from that data, two-visitor isolation test, submission page text, trailer shots, deploy to rgl10.dcl.eth (creator signs) by 29 Nov.

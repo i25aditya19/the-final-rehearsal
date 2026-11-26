@@ -6,6 +6,7 @@ import { IMPRINT } from '../config'
 import { V3 } from '../math/vec'
 import { state } from '../game/state'
 import { onReset } from '../game/session'
+import { setShown } from './visibility'
 
 const POOL_SIZE = 28
 type Tracer = { entity: Entity; until: number; duration: number; width: number; from: V3; to: V3; color: string; intensity: number }
@@ -18,6 +19,7 @@ export function createTracerPool() {
     const e = engine.addEntity()
     Transform.create(e, { position: HIDDEN, scale: Vector3.Zero() })
     MeshRenderer.setCylinder(e)
+    setShown(e, false)
     pool.push({ entity: e, until: -1, duration: 1, width: 0, from: HIDDEN, to: HIDDEN, color: '', intensity: 0 })
   }
   engine.addSystem(tracerSystem)
@@ -48,6 +50,7 @@ export function spawnTracer(from: V3, to: V3, colorHex: string, impact: boolean,
     t.color = colorHex
     t.intensity = intensity
   }
+  setShown(t.entity, true)
   place(t, 1)
 }
 
@@ -72,6 +75,7 @@ function tracerSystem() {
       tr.scale = Vector3.Zero()
       tr.position = HIDDEN
       t.until = -1
+      setShown(t.entity, false)
     } else {
       place(t, Math.max(0.15, remaining / t.duration))
     }
@@ -84,5 +88,6 @@ export function clearTracers() {
     const tr = Transform.getMutable(t.entity)
     tr.scale = Vector3.Zero()
     tr.position = HIDDEN
+    setShown(t.entity, false)
   }
 }

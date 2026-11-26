@@ -1,7 +1,8 @@
 // Flying spell projectiles: a bright core with a soft halo and a stretched streak, leaving a
 // particle trail. The hit is decided at launch (fixed direction, stationary target) and the
 // damage is applied when the projectile actually arrives, so feedback matches what you see.
-import { Entity, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { Entity, GltfContainer, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { setShown } from './visibility'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { IMPRINT } from '../config'
 import { V3, add, dist, norm, scale, sub } from '../math/vec'
@@ -47,8 +48,9 @@ const rgb = (hex: string) => {
 function paint(p: Projectile, hex: string) {
   if (p.color === hex) return
   p.color = hex
-  Material.setPbrMaterial(p.core, { albedoColor: rgba('#FFFFFF', 1), emissiveColor: rgb(hex), emissiveIntensity: 6 })
-  Material.setPbrMaterial(p.halo, { albedoColor: rgba(hex, 0.28), emissiveColor: rgb(hex), emissiveIntensity: 3, transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND })
+  // Low-poly shared orbs (80 tris) instead of built-in spheres.
+  const glow = hex.toUpperCase() === '#C5223F' ? 'crimson' : hex.toUpperCase() === '#D8B76B' ? 'gold' : 'cyan'
+  GltfContainer.createOrReplace(p.halo, { src: `assets/fx/glow_${glow}.glb`, visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
   Material.setPbrMaterial(p.streak, { albedoColor: rgba(hex, 0.45), emissiveColor: rgb(hex), emissiveIntensity: 4, transparencyMode: MaterialTransparencyMode.MTM_ALPHA_BLEND })
 }
 
@@ -58,13 +60,13 @@ export function initProjectiles() {
     Transform.create(root, { position: HIDDEN })
     const core = engine.addEntity()
     Transform.create(core, { parent: root, scale: Vector3.create(0.26, 0.26, 0.26) })
-    MeshRenderer.setSphere(core)
+    GltfContainer.create(core, { src: 'assets/fx/orb_white.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
     const halo = engine.addEntity()
     Transform.create(halo, { parent: root, scale: Vector3.create(0.7, 0.7, 0.7) })
-    MeshRenderer.setSphere(halo)
     const streak = engine.addEntity()
     Transform.create(streak, { parent: root })
     MeshRenderer.setCylinder(streak, 0.12, 0.5) // wide at the core (front), tapering behind
+    setShown(root, false)
     pool.push({ id: 0, root, core, halo, streak, active: false, from: HIDDEN, dir: Vector3.Forward(), length: 0, travelled: 0, speed: 0, hit: false, run: 0, trail: -1, color: '', size: 1 })
   }
   engine.addSystem(projectileSystem)
@@ -99,6 +101,7 @@ export function launch(from: V3, to: V3, colorHex: string, hit: boolean, onArriv
   Transform.getMutable(p.halo).scale = Vector3.create(0.7 * k, 0.7 * k, 0.7 * k)
   Transform.getMutable(p.root).rotation = Quaternion.lookRotation(Vector3.create(p.dir.x, p.dir.y, p.dir.z))
   p.trail = claimTrail(p.id, colorHex, from)
+  setShown(p.root, true)
   place(p)
 }
 
@@ -129,6 +132,7 @@ function deactivate(p: Projectile) {
   p.active = false
   p.onArrive = undefined
   Transform.getMutable(p.root).position = HIDDEN
+  setShown(p.root, false)
 }
 
 function projectileSystem(dt: number) {

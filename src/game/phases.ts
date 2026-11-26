@@ -1,21 +1,23 @@
 // Runtime phase manager: routes all boss damage through the pure rules, raises gates at the
 // phase floors, runs transitions (pause, heal, transformation) and draws the barrier.
 import { Entity, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { autoCull } from '../effects/visibility'
 import { Color3, Color4, Vector3 } from '@dcl/sdk/math'
 import { ARENA, BOSS, COLORS, PHASES, PLAYER, SESSION } from '../config'
 import { BossCtx, Convergence, DamageKind, DamageOutcome, resolveBossDamage } from './phaseRules'
 import { isActive, say, speak, state } from './state'
 import { onReset } from './session'
 import { setVisage } from '../boss/watcher'
+import { finalSectors, gateSectors } from './assist'
 import { burst } from '../effects/vfx'
 
-const RULES = {
+const rules = () => ({
   phaseHealth: BOSS.phaseHealth,
   phase2OrdinaryMultiplier: PHASES.phase2OrdinaryMultiplier,
-  phase2GateSectors: PHASES.phase2GateSectors,
-  phase3MinSectors: PHASES.phase3MinSectors,
-  phase3MinEchoes: 3
-}
+  phase2GateSectors: gateSectors(),
+  phase3MinSectors: finalSectors(),
+  phase3MinEchoes: state.assist ? 2 : 3
+})
 
 let barrier: Entity
 let barrierLook = ''
@@ -33,7 +35,9 @@ export function bossCtx(): BossCtx {
 /** The single entry point for damaging The Watcher. */
 export function hitBoss(kind: DamageKind, amount: number, conv?: Convergence, at?: { x: number; y: number; z: number }): DamageOutcome {
   if (!isActive()) return { damage: 0, deflected: false, gateBroken: false, reachedFloor: false }
-  const out = resolveBossDamage(bossCtx(), kind, amount, RULES, conv)
+  const ctx = bossCtx()
+  const out = resolveBossDamage(ctx, kind, amount, rules(), conv)
+  if (out.damage > 0 && ctx.vulnerable && (kind === 'direct' || kind === 'echo')) state.blindHits++
   if (out.deflected) {
     state.deflectAt = state.time
     if (at) burst(at, COLORS.ash, 0.5)
@@ -82,6 +86,7 @@ export function initPhases() {
   barrier = engine.addEntity()
   Transform.create(barrier, { position: Vector3.create(ARENA.center.x, BOSS.hoverHeight, ARENA.center.z), scale: Vector3.Zero() })
   MeshRenderer.setSphere(barrier)
+  autoCull(barrier)
   engine.addSystem(phaseSystem)
   onReset(() => {
     barrierLook = ''

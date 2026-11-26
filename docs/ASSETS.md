@@ -21,11 +21,12 @@ Every non-code file in the scene must be listed here before it is committed. The
 | assets/environment/astro_clock.glb | Aholo (tex_mesh_11.glb, 408,984 tris); 3,984 tris, bronze -> silver | creator (Aholo) | Aholo output; creator confirmed Aholo terms allow publishing | 2026-11-25 | Credit "Aholo" | Yes |
 | assets/boss/watcher_hand.glb | Aholo (tex_mesh_3.glb) | creator (Aholo) | Aholo output; creator-confirmed terms | 2026-11-25 | Credit "Aholo" | Yes |
 
-On 2026-11-25 the creator confirmed that Aholo's terms and conditions allow publishing these models on GitHub. They are optimized derivatives of the creator's Aholo generations (see scripts/asset-pipeline). The repository's MIT license covers the code; the models remain subject to Aholo's terms. The game falls back to a primitive Watcher if they are absent. Arena and effects are procedural SDK primitives.
+On 2026-11-25 the creator confirmed that Aholo's terms and conditions allow publishing these models on GitHub. They are optimized derivatives of the creator's Aholo generations (see scripts/asset-pipeline). The repository's MIT license covers the code; the models remain subject to Aholo's terms. The game falls back to a primitive Watcher if they are absent. Arena shell, props and effects are procedural (listed below).
 
-| assets/environment/chamber_floor.glb, chamber_wall.glb, chamber_vault.glb | generated procedurally for this project (scripts/asset-pipeline/build_chamber_shell.py) | project | MIT (with the code) | 2026-11-25 | No | Yes |
+| assets/environment/chamber_floor.glb, chamber_wall.glb, chamber_vault.glb, chamber_parapet.glb | generated procedurally for this project (scripts/asset-pipeline/build_chamber_shell.py) | project | MIT (with the code) | 2026-11-25 | No | Yes |
 | assets/audio/*.ogg (22 cues + 2 music loops) | synthesized from scratch for this project with numpy (scripts/asset-pipeline/build_audio.py); no samples or third-party audio | project | MIT (with the code) | 2026-11-26 | No | Yes |
 | assets/telegraphs/*.glb | generated procedurally (scripts/asset-pipeline/build_telegraphs.py) | project | MIT (with the code) | 2026-11-26 | No | Yes |
+| assets/fx/orb_*.glb, glow_*.glb, shard.glb; assets/environment/book.glb | generated procedurally (scripts/asset-pipeline/build_props.py) | project | MIT (with the code) | 2026-11-26 | No | Yes |
 | assets/images/glow.png, spark.png | generated procedurally for this project (Python/PIL) | project | MIT (with the code) | 2026-11-25 | No | Yes |
 
 ## Third-party code

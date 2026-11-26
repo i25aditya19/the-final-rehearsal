@@ -1,18 +1,25 @@
-// M1 HUD: boss name + segmented health bar, Imprint readiness, crosshair, contextual hint, debug.
+// HUD: a restrained Gothic interface. Dark translucent panels with thin silver borders, serif
+// titles, readable sans-serif instructions. Shows: boss name/phase + segmented health, vitality
+// and time, Imprint and Convergence readiness, four echo slots, a quadrant compass, objective,
+// contextual hints, attack names, the Watcher's subtitles, results. Debug line only if enabled.
 import { Color4 } from '@dcl/sdk/math'
 import ReactEcs, { ReactEcsRenderer, UiEntity } from '@dcl/sdk/react-ecs'
-import { BOSS, COLORS, CONVERGENCE, ECHO, IMPRINT, PLAYER, UI } from '../config'
+import { ARENA, BOSS, COLORS, ECHO, IMPRINT, PLAYER, UI } from '../config'
 import { isActive, state } from '../game/state'
-import { remainingSeconds, retry } from '../game/session'
+import { remainingSeconds, retry, retryGuided } from '../game/session'
 import { currentAttack } from '../boss/attacks'
 import { objectiveText } from '../game/phases'
 import { oldestReplaceable, readyGroup, timeToFire } from '../echoes/echoLogic'
+import { readyWindow } from '../game/assist'
+import { sectorOf } from '../combat/aim'
 
 const c = (hex: string, a = 1) => {
   const k = Color4.fromHexString(hex)
   return Color4.create(k.r, k.g, k.b, a)
 }
-const PANEL = Color4.create(0.04, 0.04, 0.04, 0.72)
+const PANEL = Color4.create(0.035, 0.035, 0.04, 0.72)
+const BORDER = Color4.create(0.59, 0.59, 0.62, 0.55)
+const frame = { borderColor: BORDER, borderWidth: 1, borderRadius: 3 }
 const SECTORS = ['North', 'East', 'South', 'West']
 
 export function setupHud() {
@@ -23,9 +30,11 @@ function Hud() {
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}>
       <HitFlash />
+      <ConvergenceFlash />
       <BossBar />
       <Subtitle />
       {isActive() ? <ActiveHud /> : <Results />}
+      <Entrance />
       {UI.showDebug ? <Debug /> : null}
     </UiEntity>
   )
@@ -38,6 +47,7 @@ function ActiveHud() {
       <ImprintIndicator />
       <EchoSlots />
       <ConvergenceIndicator />
+      <GuidedConvergence />
       <Message />
       <AttackWarning />
       <Objective />
@@ -52,6 +62,20 @@ function fmt(sec: number) {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
+/** Title card in the first seconds: does not block play. */
+function Entrance() {
+  const t = state.time
+  if (!isActive() || t > 5.5 || (state.runId > 1 && t > 3)) return null
+  const a = t < 0.8 ? t / 0.8 : t > 4.2 ? Math.max(0, 1 - (t - 4.2) / 1.3) : 1
+  return (
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: '26%', left: '50%' }, margin: { left: -360 }, width: 720, height: 120, flexDirection: 'column', alignItems: 'center' }}>
+      <UiEntity uiTransform={{ width: '100%', height: 64 }} uiText={{ value: 'THE FINAL REHEARSAL', fontSize: 46, font: 'serif', color: c(COLORS.ivory, a) }} />
+      <UiEntity uiTransform={{ width: '100%', height: 26 }} uiText={{ value: 'the Chamber of Unforgotten Moments', fontSize: 17, font: 'serif', color: c(COLORS.silver, a) }} />
+      <UiEntity uiTransform={{ width: 260, height: 1, margin: { top: 8 } }} uiBackground={{ color: c(COLORS.silver, a * 0.6) }} />
+    </UiEntity>
+  )
+}
+
 /** Vitality and remaining time, top-left. */
 function PlayerPanel() {
   const hp = Math.max(0, state.playerHp)
@@ -59,12 +83,12 @@ function PlayerPanel() {
   const low = hp <= 30
   const remaining = remainingSeconds()
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 18, left: 80 }, width: 250, height: 64, flexDirection: 'column', padding: 6 }} uiBackground={{ color: PANEL }}>
-      <UiEntity uiTransform={{ width: '100%', height: 20 }} uiText={{ value: `VITALITY  ${Math.ceil(hp)}`, fontSize: 14, color: c(low ? COLORS.dangerCrimson : COLORS.ivory), textAlign: 'middle-left' }} />
-      <UiEntity uiTransform={{ width: 230, height: 10 }} uiBackground={{ color: c(COLORS.charcoal) }}>
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 18, left: 80 }, width: 236, height: 60, flexDirection: 'column', padding: { left: 10, right: 10, top: 6, bottom: 6 }, ...frame }} uiBackground={{ color: PANEL }}>
+      <UiEntity uiTransform={{ width: '100%', height: 18 }} uiText={{ value: `VITALITY   ${Math.ceil(hp)}${state.assist ? '   ·   GUIDED' : ''}`, fontSize: 13, color: c(low ? COLORS.dangerCrimson : COLORS.ivory), textAlign: 'middle-left' }} />
+      <UiEntity uiTransform={{ width: '100%', height: 6, margin: { top: 3, bottom: 4 } }} uiBackground={{ color: c(COLORS.charcoal) }}>
         <UiEntity uiTransform={{ width: `${pct}%`, height: '100%' }} uiBackground={{ color: c(low ? COLORS.dangerCrimson : COLORS.ash) }} />
       </UiEntity>
-      <UiEntity uiTransform={{ width: '100%', height: 20 }} uiText={{ value: `TIME  ${fmt(remaining)}`, fontSize: 13, color: c(remaining < 30 ? COLORS.dangerCrimson : COLORS.silver), textAlign: 'middle-left' }} />
+      <UiEntity uiTransform={{ width: '100%', height: 16 }} uiText={{ value: `TIME   ${fmt(remaining)}`, fontSize: 12, color: c(remaining < 30 ? COLORS.dangerCrimson : COLORS.silver), textAlign: 'middle-left' }} />
     </UiEntity>
   )
 }
@@ -73,24 +97,38 @@ function PlayerPanel() {
 function HitFlash() {
   const since = state.time - state.playerHitAt
   if (since < 0 || since > 0.35) return null
-  const a = 0.35 * (1 - since / 0.35)
-  const edge = Color4.create(0.77, 0.13, 0.25, a)
+  return <EdgeGlow color={Color4.create(0.77, 0.13, 0.25, 0.35 * (1 - since / 0.35))} />
+}
+
+/** Gold edge glow for a successful Convergence (stronger for more echoes). */
+function ConvergenceFlash() {
+  const cv = state.lastConvergence
+  if (!cv || cv.hits < 2) return null
+  const since = state.time - cv.at
+  if (since < 0 || since > 0.6) return null
+  const k = (cv.hits >= 4 ? 0.42 : cv.hits === 3 ? 0.3 : 0.2) * (1 - since / 0.6)
+  return <EdgeGlow color={Color4.create(0.85, 0.72, 0.42, k)} />
+}
+
+function EdgeGlow(props: { color: Color4 }) {
+  const edge = props.color
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}>
-      <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: '100%', height: 22 }} uiBackground={{ color: edge }} />
-      <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: 0, left: 0 }, width: '100%', height: 22 }} uiBackground={{ color: edge }} />
-      <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: 22, height: '100%' }} uiBackground={{ color: edge }} />
-      <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, right: 0 }, width: 22, height: '100%' }} uiBackground={{ color: edge }} />
+      <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: '100%', height: 20 }} uiBackground={{ color: edge }} />
+      <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: 0, left: 0 }, width: '100%', height: 20 }} uiBackground={{ color: edge }} />
+      <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: 20, height: '100%' }} uiBackground={{ color: edge }} />
+      <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, right: 0 }, width: 20, height: '100%' }} uiBackground={{ color: edge }} />
     </UiEntity>
   )
 }
 
 /** Current objective, always visible under the boss bar. */
 function Objective() {
+  const hot = state.stage === 'gate' || state.time < state.windowOpenUntil || state.time < state.vulnerableUntil
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { top: 84, left: '50%' }, margin: { left: -260 }, width: 520, height: 22, justifyContent: 'center' }}
-      uiText={{ value: objectiveText(), fontSize: 13, color: c(state.stage === 'gate' || state.time < state.windowOpenUntil || state.time < state.vulnerableUntil ? COLORS.syncGold : COLORS.silver) }}
+      uiTransform={{ positionType: 'absolute', position: { top: 82, left: '50%' }, margin: { left: -280 }, width: 560, height: 22, justifyContent: 'center' }}
+      uiText={{ value: objectiveText(), fontSize: 13, color: c(hot ? COLORS.syncGold : COLORS.silver) }}
     />
   )
 }
@@ -98,64 +136,83 @@ function Objective() {
 /** Short telegraph label: the floor shape is the real warning, this names it. */
 function AttackWarning() {
   const a = currentAttack()
-  if (!a) return null
-  if (a === 'stolen' || a === 'blindspot' || a === 'observation' || a === 'volley') return null
+  if (!a || a === 'stolen' || a === 'blindspot' || a === 'observation' || a === 'volley') return null
   const text = a === 'gaze' ? 'THE GAZE  ·  step out of the crimson cone' : 'AFTERSHOCK  ·  jump the wave or stand in a pale gap'
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { top: 140, left: '50%' }, margin: { left: -230 }, width: 460, height: 30, justifyContent: 'center' }}
-      uiBackground={{ color: Color4.create(0.3, 0.03, 0.08, 0.55) }}
-      uiText={{ value: text, fontSize: 15, color: c(COLORS.ivory) }}
+      uiTransform={{ positionType: 'absolute', position: { top: 140, left: '50%' }, margin: { left: -230 }, width: 460, height: 28, justifyContent: 'center', ...frame }}
+      uiBackground={{ color: Color4.create(0.25, 0.03, 0.07, 0.55) }}
+      uiText={{ value: text, fontSize: 14, color: c(COLORS.ivory) }}
     />
   )
 }
 
-/** The Watcher's lines: short, non-blocking subtitles. */
+/** The Watcher's lines: short, non-blocking serif subtitles. */
 function Subtitle() {
   if (!state.subtitle || state.time > state.subtitleUntil) return null
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { top: 176, left: '50%' }, margin: { left: -300 }, width: 600, height: 30, justifyContent: 'center' }}
-      uiText={{ value: `"${state.subtitle}"`, fontSize: 17, color: c(COLORS.ash) }}
+      uiTransform={{ positionType: 'absolute', position: { top: 176, left: '50%' }, margin: { left: -320 }, width: 640, height: 30, justifyContent: 'center' }}
+      uiText={{ value: `"${state.subtitle}"`, fontSize: 18, font: 'serif', color: c(COLORS.ash) }}
     />
   )
 }
 
-/** Victory / defeat results with a retry button (E also retries). */
+/** Victory / defeat results with retry (E also retries); guided retry after two defeats. */
 function Results() {
   const won = state.phase === 'victory'
   const since = state.time - state.endedAt
-  if (since < (state.phase === 'victory' ? 6.5 : 1.2)) return null
+  if (since < (won ? 6.5 : 1.2)) return null
   const t = state.endedAt
-  const reason = state.endReason === 'time' ? 'Time ran out.' : state.endReason === 'health' ? `Your vitality was exhausted${state.lastHitBy ? ` (${state.lastHitBy})` : ''}.` : ''
+  const reason = state.endReason === 'time' ? 'Time ran out.' : state.endReason === 'health' ? `Your vitality was exhausted${state.lastHitBy ? ` by ${state.lastHitBy}` : ''}.` : ''
   const tip = state.convergences === 0
     ? 'Tip: cast from two places, then press E when both runes glow gold.'
-    : state.endReason === 'time'
-      ? 'Tip: more echoes in a Convergence deal far more damage (2 = 12, 3 = 24, 4 = 40).'
-      : 'Tip: watch the floor: leave the crimson cone, jump the ring or stand in a pale gap.'
+    : state.bossPhase >= 2
+      ? 'Tip: spread echoes over three quadrants (N/E/S/W runes) to break his barriers.'
+      : 'Tip: leave the crimson cone, jump the ring or stand in a pale gap.'
   const sc = state.score
+  const offerGuided = !won && state.defeats >= 2 && !state.assist
   const lines = [
-    won && sc ? `MASTERY ${sc.total}  ·  GRADE ${sc.grade}${state.newBest ? '  ·  NEW PERSONAL BEST' : `  ·  best ${state.personalBest}`}` : '',
-    won ? `Time: ${fmt(t)}   ·   Four-way Convergences: ${state.fourWay}   ·   Redirects: ${state.redirects}` : `${reason}  Reached phase ${['', 'I', 'II', 'III'][state.bossPhase]}.`,
-    `Best Convergence: ${state.bestConvergence > 0 ? `${state.bestConvergence} echoes` : 'none'}`,
-    `Vitality lost: ${Math.round(state.damageTaken)}   ·   Spells cast: ${state.shots}`,
+    won ? `Time ${fmt(t)}   ·   Four-way Convergences ${state.fourWay}   ·   Redirects ${state.redirects}` : `${reason}  Reached phase ${['', 'I', 'II', 'III'][state.bossPhase]}.`,
+    `Best Convergence: ${state.bestConvergence > 0 ? `${state.bestConvergence} echoes` : 'none'}   ·   Vitality lost: ${Math.round(state.damageTaken)}`,
     won ? '' : tip
   ].filter((l) => l)
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
-      <UiEntity uiTransform={{ width: 600, height: 360, flexDirection: 'column', alignItems: 'center', padding: 18 }} uiBackground={{ color: Color4.create(0.03, 0.03, 0.03, 0.88) }}>
-        <UiEntity uiTransform={{ width: '100%', height: 46 }} uiText={{ value: won ? 'TIME MOVES FORWARD AGAIN' : 'A MOMENT LOST', fontSize: 28, color: c(won ? COLORS.syncGold : COLORS.dangerCrimson) }} />
-        <UiEntity uiTransform={{ width: '100%', height: 24, margin: { bottom: 10 } }} uiText={{ value: won ? 'The Watcher is defeated.' : 'The Watcher keeps this moment.', fontSize: 15, color: c(COLORS.silver) }} />
+      <UiEntity uiTransform={{ width: 620, height: won ? 400 : 330, flexDirection: 'column', alignItems: 'center', padding: 20, ...frame }} uiBackground={{ color: Color4.create(0.025, 0.025, 0.03, 0.9) }}>
+        <UiEntity uiTransform={{ width: '100%', height: 50 }} uiText={{ value: won ? 'TIME MOVES FORWARD AGAIN' : 'A MOMENT LOST', fontSize: 32, font: 'serif', color: c(won ? COLORS.syncGold : COLORS.dangerCrimson) }} />
+        <UiEntity uiTransform={{ width: 300, height: 1, margin: { bottom: 8 } }} uiBackground={{ color: BORDER }} />
+        <UiEntity uiTransform={{ width: '100%', height: 22, margin: { bottom: 6 } }} uiText={{ value: won ? 'The Watcher is released from his archive.' : 'The Watcher keeps this moment.', fontSize: 15, font: 'serif', color: c(COLORS.silver) }} />
+        {won && sc ? (
+          <UiEntity uiTransform={{ width: '100%', height: 40 }} uiText={{ value: `MASTERY ${sc.total}   ·   GRADE ${sc.grade}${state.newBest ? '   ·   NEW PERSONAL BEST' : `   ·   best ${state.personalBest}`}`, fontSize: 19, color: c(COLORS.ivory) }} />
+        ) : null}
         {lines.map((l, i) => (
-          <UiEntity key={`line${i}`} uiTransform={{ width: '100%', height: 26 }} uiText={{ value: l, fontSize: 14, color: c(COLORS.ash) }} />
+          <UiEntity key={`line${i}`} uiTransform={{ width: '100%', height: 24 }} uiText={{ value: l, fontSize: 13, color: c(COLORS.ash) }} />
         ))}
-        <UiEntity
-          uiTransform={{ width: 280, height: 48, margin: { top: 16 }, justifyContent: 'center' }}
-          uiBackground={{ color: c(won ? COLORS.syncGold : COLORS.ivory, 0.9) }}
-          uiText={{ value: won ? 'REHEARSE AGAIN' : 'REWRITE THE MOMENT', fontSize: 18, color: c(COLORS.obsidian) }}
-          onMouseDown={() => retry()}
-        />
-        <UiEntity uiTransform={{ width: '100%', height: 22, margin: { top: 6 } }} uiText={{ value: 'or press E', fontSize: 12, color: c(COLORS.silver) }} />
+        {won && state.achievements.length ? (
+          <UiEntity uiTransform={{ width: '100%', height: 30, flexDirection: 'row', justifyContent: 'center', margin: { top: 6 } }}>
+            {state.achievements.map((a, i) => (
+              <UiEntity key={`ach${i}`} uiTransform={{ height: 24, width: 12 + a.length * 9, margin: { left: 4, right: 4 }, justifyContent: 'center', ...frame }} uiBackground={{ color: c(COLORS.syncGold, 0.18) }} uiText={{ value: a, fontSize: 11, color: c(COLORS.syncGold) }} />
+            ))}
+          </UiEntity>
+        ) : null}
+        <UiEntity uiTransform={{ width: '100%', height: 54, flexDirection: 'row', justifyContent: 'center', margin: { top: 14 } }}>
+          <UiEntity
+            uiTransform={{ width: 260, height: 46, justifyContent: 'center', margin: { left: 6, right: 6 }, ...frame }}
+            uiBackground={{ color: c(won ? COLORS.syncGold : COLORS.ivory, 0.92) }}
+            uiText={{ value: won ? 'REHEARSE AGAIN' : 'REWRITE THE MOMENT', fontSize: 17, font: 'serif', color: c(COLORS.obsidian) }}
+            onMouseDown={() => retry()}
+          />
+          {offerGuided ? (
+            <UiEntity
+              uiTransform={{ width: 260, height: 46, justifyContent: 'center', margin: { left: 6, right: 6 }, ...frame }}
+              uiBackground={{ color: c(COLORS.echoCyan, 0.85) }}
+              uiText={{ value: 'REHEARSE WITH GUIDANCE', fontSize: 15, font: 'serif', color: c(COLORS.obsidian) }}
+              onMouseDown={() => retryGuided()}
+            />
+          ) : null}
+        </UiEntity>
+        <UiEntity uiTransform={{ width: '100%', height: 20, margin: { top: 4 } }} uiText={{ value: offerGuided ? 'Guidance: more warning time, a wider Convergence window, two sides suffice.  ·  or press E' : 'or press E', fontSize: 11, color: c(COLORS.silver) }} />
       </UiEntity>
     </UiEntity>
   )
@@ -164,24 +221,19 @@ function Results() {
 function BossBar() {
   const segW = 150
   const perSeg = BOSS.phaseHealth
-  const segs = [0, 1, 2].map((i) => {
-    // Segment 0 is the last phase (leftmost drains last).
-    const segHp = Math.max(0, Math.min(perSeg, state.bossHp - i * perSeg))
-    return segHp / perSeg
-  })
+  const segs = [0, 1, 2].map((i) => Math.max(0, Math.min(perSeg, state.bossHp - i * perSeg)) / perSeg)
+  const gate = state.stage === 'gate'
+  const names = ['', 'I · THE OBSERVER', 'II · THE INTERFERENCE', 'III · THE ALL-SEEING']
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { top: 18, left: '50%' }, margin: { left: -250 }, width: 500, height: 64, flexDirection: 'column', alignItems: 'center', padding: 6 }}
+      uiTransform={{ positionType: 'absolute', position: { top: 16, left: '50%' }, margin: { left: -255 }, width: 510, height: 62, flexDirection: 'column', alignItems: 'center', padding: 6, ...frame }}
       uiBackground={{ color: PANEL }}
     >
-      <UiEntity
-        uiTransform={{ width: '100%', height: 26 }}
-        uiText={{ value: `THE WATCHER  ·  ${['', 'I · THE OBSERVER', 'II · THE INTERFERENCE', 'III · THE ALL-SEEING'][state.bossPhase]}${state.stage === 'gate' ? '  ·  BARRIER' : ''}`, fontSize: 16, color: c(state.stage === 'gate' ? COLORS.syncGold : COLORS.ivory) }}
-      />
-      <UiEntity uiTransform={{ width: segW * 3 + 12, height: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
+      <UiEntity uiTransform={{ width: '100%', height: 24 }} uiText={{ value: `THE WATCHER   ${names[state.bossPhase]}${gate ? '   ·   BARRIER' : ''}`, fontSize: 16, font: 'serif', color: c(gate ? COLORS.syncGold : COLORS.ivory) }} />
+      <UiEntity uiTransform={{ width: segW * 3 + 12, height: 14, flexDirection: 'row', justifyContent: 'space-between' }}>
         {segs.map((fill, i) => (
-          <UiEntity key={`seg${i}`} uiTransform={{ width: segW, height: 14 }} uiBackground={{ color: c(COLORS.charcoal) }}>
-            <UiEntity uiTransform={{ width: `${Math.round(fill * 100)}%`, height: '100%' }} uiBackground={{ color: c(state.time < state.bossFlashUntil ? COLORS.finalWhite : COLORS.ash) }} />
+          <UiEntity key={`seg${i}`} uiTransform={{ width: segW, height: 10, borderColor: BORDER, borderWidth: 1 }} uiBackground={{ color: c(COLORS.obsidian, 0.9) }}>
+            <UiEntity uiTransform={{ width: `${Math.round(fill * 100)}%`, height: '100%' }} uiBackground={{ color: c(state.time < state.bossFlashUntil ? COLORS.finalWhite : gate && fill > 0 && i === state.bossPhase - 1 ? COLORS.syncGold : COLORS.ash) }} />
           </UiEntity>
         ))}
       </UiEntity>
@@ -195,11 +247,11 @@ function ImprintIndicator() {
   const pct = ready ? 100 : Math.round((1 - remaining / IMPRINT.cooldown) * 100)
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { bottom: 40, left: '50%' }, margin: { left: -110 }, width: 220, height: 46, flexDirection: 'column', alignItems: 'center', padding: 6 }}
+      uiTransform={{ positionType: 'absolute', position: { bottom: 40, left: '50%' }, margin: { left: -105 }, width: 210, height: 44, flexDirection: 'column', alignItems: 'center', padding: 6, ...frame }}
       uiBackground={{ color: PANEL }}
     >
-      <UiEntity uiTransform={{ width: '100%', height: 20 }} uiText={{ value: ready ? 'IMPRINT  ·  Left click' : 'IMPRINT  ·  recharging', fontSize: 14, color: c(ready ? COLORS.echoCyan : COLORS.silver) }} />
-      <UiEntity uiTransform={{ width: 180, height: 6 }} uiBackground={{ color: c(COLORS.charcoal) }}>
+      <UiEntity uiTransform={{ width: '100%', height: 18 }} uiText={{ value: ready ? 'IMPRINT  ·  left click' : 'IMPRINT', fontSize: 13, color: c(ready ? COLORS.echoCyan : COLORS.silver) }} />
+      <UiEntity uiTransform={{ width: 170, height: 4, margin: { top: 4 } }} uiBackground={{ color: c(COLORS.charcoal) }}>
         <UiEntity uiTransform={{ width: `${pct}%`, height: '100%' }} uiBackground={{ color: c(COLORS.echoCyan) }} />
       </UiEntity>
     </UiEntity>
@@ -222,48 +274,73 @@ function Hint() {
   const anyRepeat = state.echoRepeats > 0
   if (!state.pointerLocked) text = 'Click to take aim'
   else if (state.shots === 0) text = 'Cast a spell at The Watcher  (left click)'
-  else if (!anyRepeat && state.echoes.length > 0) text = 'Your spell remembers...'
-  else if (state.echoes.length < 2 && state.convergences === 0) text = 'Move, then cast again: each spot keeps its own echo'
-  else if (state.convergences === 0) text = 'When the echo runes glow gold, press E  ·  Convergence'
+  else if (!anyRepeat && state.echoes.length > 0) text = 'Your spell remembers...  watch the echo'
+  else if (state.echoes.length < 2 && state.convergences === 0) text = 'Move, then cast again: each place keeps its own echo'
   if (!text) return null
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { top: 108, left: '50%' }, margin: { left: -260 }, width: 520, height: 30, justifyContent: 'center' }}
-      uiBackground={{ color: Color4.create(0.04, 0.04, 0.04, 0.55) }}
-      uiText={{ value: text, fontSize: 16, color: c(COLORS.echoCyan) }}
+      uiTransform={{ positionType: 'absolute', position: { top: 108, left: '50%' }, margin: { left: -260 }, width: 520, height: 28, justifyContent: 'center', ...frame }}
+      uiBackground={{ color: Color4.create(0.03, 0.03, 0.035, 0.55) }}
+      uiText={{ value: text, fontSize: 15, color: c(COLORS.echoCyan) }}
+    />
+  )
+}
+
+/** First Convergence: an unmistakable prompt exactly when it would work. */
+function GuidedConvergence() {
+  if (state.convergences > 0 || state.time < state.convergenceReadyAt) return null
+  const ready = readyGroup(state.echoes, state.time, readyWindow()).length
+  if (ready < 2) {
+    if (state.echoes.filter((e) => !e.corrupted).length >= 2 && state.echoRepeats > 0) {
+      return (
+        <UiEntity
+          uiTransform={{ positionType: 'absolute', position: { bottom: 200, left: '50%' }, margin: { left: -220 }, width: 440, height: 26, justifyContent: 'center' }}
+          uiText={{ value: 'Watch the runes beneath your echoes: when they glow gold...', fontSize: 14, color: c(COLORS.syncGold, 0.85) }}
+        />
+      )
+    }
+    return null
+  }
+  const pulse = 0.65 + 0.35 * Math.abs(Math.sin(state.time * 6))
+  return (
+    <UiEntity
+      uiTransform={{ positionType: 'absolute', position: { bottom: 196, left: '50%' }, margin: { left: -170 }, width: 340, height: 44, justifyContent: 'center', ...frame }}
+      uiBackground={{ color: Color4.create(0.85, 0.72, 0.42, 0.22 * pulse) }}
+      uiText={{ value: 'PRESS  E   ·   CONVERGENCE', fontSize: 22, font: 'serif', color: c(COLORS.syncGold, pulse) }}
     />
   )
 }
 
 function Message() {
   if (!state.message || state.time > state.messageUntil) return null
-  const gold = state.message.includes('CONVERGENCE')
+  const gold = state.message.includes('CONVERGENCE') || state.message.includes('SHATTERS')
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { bottom: 150, left: '50%' }, margin: { left: -260 }, width: 520, height: 32, justifyContent: 'center' }}
-      uiBackground={{ color: Color4.create(0.04, 0.04, 0.04, 0.6) }}
-      uiText={{ value: state.message, fontSize: gold ? 18 : 15, color: c(gold ? COLORS.syncGold : COLORS.ash) }}
+      uiTransform={{ positionType: 'absolute', position: { bottom: 150, left: '50%' }, margin: { left: -300 }, width: 600, height: 30, justifyContent: 'center', ...frame }}
+      uiBackground={{ color: Color4.create(0.03, 0.03, 0.035, 0.62) }}
+      uiText={{ value: state.message, fontSize: gold ? 17 : 14, color: c(gold ? COLORS.syncGold : COLORS.ash) }}
     />
   )
 }
 
-/** Four echo slots: rune progress, gold when ready, "next" marks the one a new echo replaces. */
+/** Four echo slots plus a quadrant compass showing which sides hold an echo. */
 function EchoSlots() {
   const full = state.echoes.length >= ECHO.maxSlots
   const oldest = full ? oldestReplaceable(state.echoes) : undefined
+  const rw = readyWindow()
   const slots = []
   for (let i = 0; i < ECHO.maxSlots; i++) {
     const e = state.echoes[i]
-    let label = '—'
+    let label = '·'
     let color = c(COLORS.stone)
     let fill = 0
     let fillColor = c(COLORS.echoCyan)
     if (e) {
       const ttf = timeToFire(e, state.time)
       fill = Math.min(1, Math.max(0, 1 - ttf / ECHO.repeatInterval))
-      const ready = !e.corrupted && ttf <= CONVERGENCE.readyWindow
+      const ready = !e.corrupted && ttf <= rw
       if (e.corrupted) {
-        label = 'LOST'
+        label = 'STOLEN'
         color = c(COLORS.dangerCrimson)
         fillColor = color
       } else if (ready) {
@@ -277,47 +354,77 @@ function EchoSlots() {
       if (oldest && oldest.id === e.id) label += ' · next'
     }
     slots.push(
-      <UiEntity key={`slot${i}`} uiTransform={{ width: 74, height: 38, margin: { right: 6 }, flexDirection: 'column', alignItems: 'center', padding: 3 }} uiBackground={{ color: Color4.create(0.08, 0.08, 0.08, 0.8) }}>
-        <UiEntity uiTransform={{ width: '100%', height: 20 }} uiText={{ value: label, fontSize: 12, color }} />
-        <UiEntity uiTransform={{ width: 60, height: 5 }} uiBackground={{ color: c(COLORS.charcoal) }}>
+      <UiEntity key={`slot${i}`} uiTransform={{ width: 62, height: 36, margin: { right: 5 }, flexDirection: 'column', alignItems: 'center', padding: 3, borderColor: BORDER, borderWidth: 1, borderRadius: 2 }} uiBackground={{ color: Color4.create(0.06, 0.06, 0.07, 0.8) }}>
+        <UiEntity uiTransform={{ width: '100%', height: 18 }} uiText={{ value: label, fontSize: 11, color }} />
+        <UiEntity uiTransform={{ width: 50, height: 4 }} uiBackground={{ color: c(COLORS.charcoal) }}>
           <UiEntity uiTransform={{ width: `${Math.round(fill * 100)}%`, height: '100%' }} uiBackground={{ color: fillColor }} />
         </UiEntity>
       </UiEntity>
     )
   }
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: 40, left: '50%' }, margin: { left: -460 }, width: 330, height: 58, flexDirection: 'column', padding: 4 }} uiBackground={{ color: PANEL }}>
-      <UiEntity uiTransform={{ width: '100%', height: 14 }} uiText={{ value: 'ECHOES', fontSize: 11, color: c(COLORS.silver), textAlign: 'middle-left' }} />
-      <UiEntity uiTransform={{ width: '100%', height: 40, flexDirection: 'row' }}>{slots}</UiEntity>
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: 40, left: '50%' }, margin: { left: -470 }, width: 350, height: 60, flexDirection: 'row', padding: 5, ...frame }} uiBackground={{ color: PANEL }}>
+      <UiEntity uiTransform={{ width: 278, height: 50, flexDirection: 'column' }}>
+        <UiEntity uiTransform={{ width: '100%', height: 12 }} uiText={{ value: 'ECHOES', fontSize: 10, color: c(COLORS.silver), textAlign: 'middle-left' }} />
+        <UiEntity uiTransform={{ width: '100%', height: 38, flexDirection: 'row' }}>{slots}</UiEntity>
+      </UiEntity>
+      <Compass />
+    </UiEntity>
+  )
+}
+
+/** N/E/S/W diamonds: lit where an echo stands (gold when ready, crimson if stolen); ring = you. */
+function Compass() {
+  const rw = readyWindow()
+  const look = [0, 1, 2, 3].map((q) => {
+    const here = state.echoes.filter((e) => sectorOf(e.pos, ARENA.center, 4) === q)
+    if (here.some((e) => e.corrupted)) return c(COLORS.dangerCrimson)
+    if (here.some((e) => timeToFire(e, state.time) <= rw)) return c(COLORS.syncGold)
+    if (here.length) return c(COLORS.echoCyan)
+    return c(COLORS.charcoal)
+  })
+  const dot = (q: number, top: number, left: number) => (
+    <UiEntity
+      key={`q${q}`}
+      uiTransform={{ positionType: 'absolute', position: { top, left }, width: 14, height: 14, borderColor: state.playerSector === q ? c(COLORS.ivory) : BORDER, borderWidth: state.playerSector === q ? 2 : 1, borderRadius: 3 }}
+      uiBackground={{ color: look[q] }}
+    />
+  )
+  return (
+    <UiEntity uiTransform={{ width: 56, height: 50 }}>
+      {dot(0, 0, 21)}
+      {dot(1, 18, 40)}
+      {dot(2, 36, 21)}
+      {dot(3, 18, 2)}
     </UiEntity>
   )
 }
 
 function ConvergenceIndicator() {
   const cooldown = Math.max(0, state.convergenceReadyAt - state.time)
-  const ready = readyGroup(state.echoes, state.time, CONVERGENCE.readyWindow).length
-  const valid = cooldown <= 0 && ready >= CONVERGENCE.minEchoes
-  const text = cooldown > 0 ? `CONVERGENCE · ${cooldown.toFixed(1)}s` : valid ? `CONVERGENCE · E  (${ready} ready)` : 'CONVERGENCE · E'
+  const ready = readyGroup(state.echoes, state.time, readyWindow()).length
+  const valid = cooldown <= 0 && ready >= 2
+  const text = cooldown > 0 ? `CONVERGENCE  ·  ${cooldown.toFixed(1)}s` : valid ? `CONVERGENCE  ·  E   (${ready} ready)` : 'CONVERGENCE  ·  E'
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { bottom: 40, left: '50%' }, margin: { left: 130 }, width: 250, height: 46, justifyContent: 'center', alignItems: 'center' }}
-      uiBackground={{ color: valid ? Color4.create(0.85, 0.72, 0.42, 0.28) : PANEL }}
-      uiText={{ value: text, fontSize: 15, color: c(valid ? COLORS.syncGold : COLORS.silver) }}
+      uiTransform={{ positionType: 'absolute', position: { bottom: 40, left: '50%' }, margin: { left: 120 }, width: 250, height: 44, justifyContent: 'center', alignItems: 'center', ...frame }}
+      uiBackground={{ color: valid ? Color4.create(0.85, 0.72, 0.42, 0.26) : PANEL }}
+      uiText={{ value: text, fontSize: 14, font: valid ? 'serif' : 'sans-serif', color: c(valid ? COLORS.syncGold : COLORS.silver) }}
     />
   )
 }
 
 function Debug() {
   const s = state.lastShot
-  const last = s ? `${s.kind}${s.damage ? ` -${s.damage}` : ''}${s.assisted ? ' (assist)' : ''}` : '—'
+  const last = s ? `${s.kind}${s.damage ? ` -${s.damage}` : ''}${s.assisted ? ' (assist)' : ''}` : '-'
   const cv = state.lastConvergence
   const conv = cv ? ` · conv ${cv.hits}/${cv.count} -${cv.damage} ${cv.sectors}sec` : ''
-  const sector = state.playerSector >= 0 ? SECTORS[state.playerSector] : '—'
+  const sector = state.playerSector >= 0 ? SECTORS[state.playerSector] : '-'
   return (
     <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { bottom: 8, right: 8 }, width: 470, height: 24 }}
+      uiTransform={{ positionType: 'absolute', position: { bottom: 8, right: 8 }, width: 470, height: 22 }}
       uiBackground={{ color: Color4.create(0, 0, 0, 0.5) }}
-      uiText={{ value: `M3 debug · last: ${last} · hits ${state.hits}/${state.shots}${conv} · sector ${sector} · F refill · 1 mask`, fontSize: 11, color: c(COLORS.ash) }}
+      uiText={{ value: `debug · last: ${last} · hits ${state.hits}/${state.shots}${conv} · sector ${sector} · F refill · 1 mask`, fontSize: 11, color: c(COLORS.ash) }}
     />
   )
 }

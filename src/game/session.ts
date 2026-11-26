@@ -37,10 +37,14 @@ export function endRun(reason: EndReason) {
   if (reason === 'boss') {
     speak('victory', 'A moment I could not foresee...', 5, false)
     state.score = masteryScore(state.time, state.playerHp, state.fourWay, state.redirects)
+    state.achievements = achievements()
     state.newBest = state.score.total > state.personalBest
     state.personalBest = Math.max(state.personalBest, state.score.total)
   }
-  else speak('defeat', 'Another moment for my collection.', 5, false)
+  else {
+    speak('defeat', 'Another moment for my collection.', 5, false)
+    state.defeats++
+  }
   // Free the cursor so the results button can be clicked.
   const lock = PointerLock.getMutableOrNull(engine.CameraEntity)
   if (lock) lock.isPointerLocked = false
@@ -52,6 +56,24 @@ export function retry() {
   resetState()
   for (const hook of resetHooks) hook()
   console.log(`[FinalRehearsal] retry (run ${state.runId})`)
+}
+
+/** Achievements earned this run (GAME_DESIGN 10). */
+function achievements(): string[] {
+  const a: string[] = []
+  if (state.time < 180) a.push('PRODIGY')
+  if (state.damageTaken === 0) a.push('UNTOUCHABLE')
+  if (state.fourWay > 0) a.push('PERFECT HARMONY')
+  if (state.blindHits > 0) a.push('THE UNSEEN')
+  if (state.redirects > 0) a.push('USURPER')
+  if (state.score?.grade === 'S') a.push('MASTER OF MOMENTS')
+  return a
+}
+
+/** Retry in guided mode (offered after two defeats). */
+export function retryGuided() {
+  state.assist = true
+  retry()
 }
 
 export function remainingSeconds() {

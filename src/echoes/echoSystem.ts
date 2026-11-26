@@ -1,5 +1,6 @@
 // Echo runtime: creation on cast, repeated spells every cycle, and Convergence on E.
 import { InputAction, PointerEventType, engine, inputSystem } from '@dcl/sdk/ecs'
+import { readyWindow } from '../game/assist'
 import { ARENA, COLORS, CONVERGENCE, ECHO, IMPRINT } from '../config'
 import { resolveShot, sectorOf } from '../combat/aim'
 import { bossHitVolume } from '../boss/watcher'
@@ -66,7 +67,7 @@ function tryConvergence() {
     say(`Convergence recharging (${Math.ceil(state.convergenceReadyAt - state.time)}s)`)
     return
   }
-  const group = readyGroup(state.echoes, state.time, CONVERGENCE.readyWindow)
+  const group = readyGroup(state.echoes, state.time, readyWindow())
   if (group.length < CONVERGENCE.minEchoes) {
     const friendly = state.echoes.filter((e) => !e.corrupted).length
     if (friendly < CONVERGENCE.minEchoes) say('Convergence needs two echoes. Cast from two places.')

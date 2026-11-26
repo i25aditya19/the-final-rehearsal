@@ -4,6 +4,7 @@
 // redirect it: damages him and restores the echo). Shooting the anchor reclaims it at any time;
 // it also expires by itself after 8 s. A corrupted echo is never silently deleted.
 import { Entity, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { autoCull } from '../effects/visibility'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA, COLORS, CORRUPTION, ECHO } from '../config'
 import { pointSegmentDistance, segmentCylinderT, stopDistance } from '../combat/aim'
@@ -55,6 +56,7 @@ export function initCorruption() {
   Transform.create(aimLine, { position: HIDDEN })
   MeshRenderer.setCylinder(aimLine)
   glow(aimLine, COLORS.dangerCrimson, 0.6, 3)
+  autoCull(tether, anchor, aimLine)
   engine.addSystem(corruptionVisuals)
   onReset(() => {
     mode = 'idle'

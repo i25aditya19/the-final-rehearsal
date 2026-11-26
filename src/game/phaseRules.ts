@@ -42,7 +42,7 @@ export function phaseFloor(phase: BossPhase, rules: PhaseRules): number {
 /** Does a Convergence satisfy the current gate or the phase III barrier? */
 export function convergenceQualifies(ctx: BossCtx, conv: Convergence, rules: PhaseRules): boolean {
   if (ctx.phase === 1) return conv.hits >= 2
-  if (ctx.phase === 2) return conv.hits >= 3 && conv.sectors >= rules.phase2GateSectors
+  if (ctx.phase === 2) return conv.hits >= Math.max(2, rules.phase2GateSectors) && conv.sectors >= rules.phase2GateSectors
   return conv.hits >= rules.phase3MinEchoes && conv.sectors >= rules.phase3MinSectors
 }
 
