@@ -26,6 +26,7 @@ On 2026-11-25 the creator confirmed that Aholo's terms and conditions allow publ
 | assets/environment/chamber_floor.glb, chamber_wall.glb, chamber_vault.glb, chamber_parapet.glb | generated procedurally for this project (scripts/asset-pipeline/build_chamber_shell.py) | project | MIT (with the code) | 2026-11-25 | No | Yes |
 | assets/audio/*.ogg (22 cues + 2 music loops) | synthesized from scratch for this project with numpy (scripts/asset-pipeline/build_audio.py); no samples or third-party audio | project | MIT (with the code) | 2026-11-26 | No | Yes |
 | assets/telegraphs/*.glb | generated procedurally (scripts/asset-pipeline/build_telegraphs.py) | project | MIT (with the code) | 2026-11-26 | No | Yes |
+| assets/environment/celestial_dial.glb, clock_hand.glb, armillary_ring.glb | generated procedurally (scripts/asset-pipeline/build_ceiling.py); numerals set in DejaVu Serif Bold (Bitstream Vera licence, free to embed) | project | MIT (with the code) | 2026-11-26 | No | Yes |
 | assets/fx/orb_*.glb, glow_*.glb, shard.glb; assets/environment/book.glb | generated procedurally (scripts/asset-pipeline/build_props.py) | project | MIT (with the code) | 2026-11-26 | No | Yes |
 | assets/images/glow.png, spark.png | generated procedurally for this project (Python/PIL) | project | MIT (with the code) | 2026-11-25 | No | Yes |
 
@@ -36,3 +37,5 @@ On 2026-11-25 the creator confirmed that Aholo's terms and conditions allow publ
 
 
 Optimization and recolouring for all Aholo models: `scripts/asset-pipeline/` (README there; `env_batch.sh` for the environment set). Originals are not stored in the repo.
+
+Note (2026-11-26): `astro_clock.glb` and `astro_rings.glb` (Aholo) are no longer placed in the scene (the ceiling now uses the procedural celestial dial); they stay in the repo for reference and are excluded from nothing else. Pillar, arch, window and door GLBs were geometry-smoothed (Taubin) and made fully matte (`/home/claude/tools/smoothmat.mjs`, copied to scripts/asset-pipeline).

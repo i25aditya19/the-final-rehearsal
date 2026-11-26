@@ -27,15 +27,16 @@ def gradient_tex(color, kind, size=256):
     if kind == 'wedge':
         edge = np.maximum(np.exp(-(u / 0.035) ** 2), np.exp(-((1 - u) / 0.035) ** 2))  # bright side edges
         far = np.exp(-((1 - v) / 0.03) ** 2)                                           # bright far rim
-        body = 0.32 + 0.18 * v                                                         # stronger outward
-        stripes = 0.07 * (np.sin(v * 70) > 0.75)                                      # faint ripples
-        a = np.clip(body + stripes + 0.75 * edge + 0.7 * far, 0, 1)
+        # Mostly transparent interior (the marble floor stays visible), bright readable outline.
+        body = 0.10 + 0.10 * v
+        stripes = 0.10 * (np.sin(v * 70) > 0.8)                                       # faint ripples
+        a = np.clip(body + stripes + 0.9 * edge + 0.85 * far, 0, 1)
     elif kind == 'band':
         a = np.clip(np.exp(-((v - 0.0) / 0.55) ** 2) * 0.95 + 0.1, 0, 1) * np.ones_like(u)   # bright at bottom, fading up
     elif kind == 'strip':
         a = np.exp(-((v - 0.5) / 0.28) ** 2) * np.ones_like(u)
     else:  # disc: v = radius
-        a = np.clip(0.28 + 0.9 * np.exp(-((1 - v) / 0.06) ** 2) + 0.06 * (np.sin(v * 50) > 0.8), 0, 1) * np.ones_like(u)
+        a = np.clip(0.10 + 0.95 * np.exp(-((1 - v) / 0.05) ** 2) + 0.09 * (np.sin(v * 50) > 0.85), 0, 1) * np.ones_like(u)
     rgb = np.ones((size, size, 3)) * np.array(color)[None, None, :]
     img = np.dstack([rgb, a * 255]).astype(np.uint8)
     return Image.fromarray(img, 'RGBA')

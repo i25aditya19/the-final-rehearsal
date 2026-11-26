@@ -139,6 +139,15 @@ Checkpoint before this pass: branch `checkpoint-before-polish` (cc0ab0a). Hitbox
   - Estimated GLB triangles: about 166k at rest; lights 8, particle emitters 8 (mobile budgets).
   - The 29 FPS / 235,871 triangle figure was measured by the creator before this pass; **it has not been re-measured in the client**.
 
+## In-client visual correction (2026-11-26, from creator screenshots)
+
+- Root cause of the orange-red floor and pink/lilac stone: the client's default time-of-day sky ambient and sun, plus a crimson under-light and the crimson eye light. Now: `Skybox` sky colours (= ambient) neutral grey, `Sun` neutral and dim with a fixed direction and no disc, charcoal `EnvironmentFog`, neutral silver point lights, under-light removed. Crimson comes only from the eye and attacks.
+- Telegraphs: interiors mostly transparent (10-20 % alpha) with bright outlines, so the marble shows through.
+- Architecture: Taubin-smoothed geometry (removes the crumpled-foil micro-facets) and fully matte materials on pillars, arches, windows, door; floor roughness 0.85.
+- Watcher: ivory mask faintly self-lit, crimson eye core + soft glow (no crimson light, which tinted the mask), cool rim light behind the head, robe texture local contrast raised; halos cast no shadows.
+- Ceiling: procedural celestial dial (Roman numerals, zodiac band, star field, compass rose), two slow hands, two clean armillary rings; replaces the tangled generated clock. Nothing on the ceiling casts shadows.
+- Not yet seen in the client after this change.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.

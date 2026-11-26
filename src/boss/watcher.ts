@@ -10,6 +10,7 @@ import {
   inputSystem,
   Entity,
   GltfContainer,
+  GltfNodeModifiers,
   GltfContainerLoadingState,
   LoadingState,
   Material,
@@ -44,7 +45,8 @@ const hands: { entity: Entity; base: Vector3; side: number }[] = []
 /** Primitive stand-in shown until (or instead of) the GLB model. */
 let fallback: Entity
 let eyeOrb: Entity | undefined
-let eyeLight: Entity | undefined
+let eyeLight: Entity | undefined // cool rim light behind the head (no longer crimson: it tinted the mask)
+let eyeGlow: Entity | undefined
 /** Eye position in body-model units for the current face (mask eye, or the helm's slit). */
 function eyeLocal(): Vector3 {
   return visage === 'mask' ? Vector3.create(0, 1.757, 0.28) : Vector3.create(0, 1.624, 0.262)
@@ -108,14 +110,19 @@ function createModel() {
   // The ivory mask replaces the helm for the final transformation; hidden until then.
   mask = gltf(model, M.mask, Vector3.create(M.maskOffset.x, M.maskOffset.y, M.maskOffset.z), HIDDEN_SCALE)
 
-  // The single crimson eye: a small intense emissive core plus a tight crimson light, so it reads
-  // from the far side of the arena (the eye texture alone is too small).
+  // The single crimson eye: an intense emissive core inside a soft crimson glow, so it reads from
+  // the far side of the arena. No crimson light: it washed the ivory mask pink in the client.
   eyeOrb = engine.addEntity()
-  Transform.create(eyeOrb, { parent: model, position: eyeLocal(), scale: Vector3.create(0.05, 0.05, 0.05) })
+  Transform.create(eyeOrb, { parent: model, position: eyeLocal(), scale: Vector3.create(0.065, 0.065, 0.065) })
   GltfContainer.create(eyeOrb, { src: 'assets/fx/orb_crimson.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+  eyeGlow = engine.addEntity()
+  Transform.create(eyeGlow, { parent: model, position: eyeLocal(), scale: Vector3.create(0.16, 0.16, 0.16) })
+  GltfContainer.create(eyeGlow, { src: 'assets/fx/glow_crimson.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+  // Cool rim light behind the head: backlights the halos and shoulders so the black robes separate
+  // from the dark chamber.
   eyeLight = engine.addEntity()
-  Transform.create(eyeLight, { parent: model, position: Vector3.add(eyeLocal(), Vector3.create(0, 0, 0.25)) })
-  LightSource.create(eyeLight, { type: LightSource.Type.Point({}), color: Color3.create(0.9, 0.12, 0.25), intensity: 2200, range: 6 })
+  Transform.create(eyeLight, { parent: model, position: Vector3.create(0, 1.75, -1.0) })
+  LightSource.create(eyeLight, { type: LightSource.Type.Point({}), color: Color3.create(0.82, 0.86, 0.95), intensity: 2600, range: 5 })
 
   // The Archive: one halo model, three instances at different sizes and speeds (world metres,
   // so they are parented to the root, not the scaled model).
@@ -123,6 +130,8 @@ function createModel() {
   M.haloDiameters.forEach((d, i) => {
     const k = d / 0.3
     const e = gltf(root, M.halo, head, Vector3.create(k, k, k))
+    // Halos cast no shadows: their spiked rings made a busy pattern on the floor.
+    GltfNodeModifiers.createOrReplace(e, { modifiers: [{ path: '', castShadows: false }] })
     halos.push({ entity: e, speed: M.haloSpeeds[i] ?? 8, tilt: (i - 1) * 4 })
   })
 
@@ -351,15 +360,22 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
     if (eyeOrb) {
       const et = Transform.getMutable(eyeOrb)
       et.position = eyeLocal()
-      const ke = (phase === 3 ? 0.075 : 0.05) * (1 + 0.6 * a) * (flashing ? 1.5 : 1)
+      const ke = (phase === 3 ? 0.09 : 0.065) * (1 + 0.6 * a) * (flashing ? 1.5 : 1) * Math.min(1, state.time / 2)
       et.scale = Vector3.create(ke, ke, ke)
+      if (eyeGlow) {
+        const g = Transform.getMutable(eyeGlow)
+        g.position = et.position
+        const kg = ke * (2.4 + 0.5 * Math.sin(t * 3))
+        g.scale = Vector3.create(kg, kg, kg)
+      }
     }
     if (eyeLight) {
       const l = LightSource.getMutable(eyeLight)
-      l.intensity = (phase === 3 ? 4200 : 2200) * (1 + 1.5 * a) * Math.min(1, state.time / 2)
+      l.intensity = (phase === 3 ? 3400 : 2600) * Math.min(1, state.time / 2)
     }
   } else if (shattered && eyeOrb) {
     Transform.getMutable(eyeOrb).scale = Vector3.Zero()
+    if (eyeGlow) Transform.getMutable(eyeGlow).scale = Vector3.Zero()
     if (eyeLight) LightSource.getMutable(eyeLight).intensity = 0
   }
 

@@ -1,6 +1,7 @@
 // Animated chamber pieces (static architecture lives in main.composite):
-// - the astronomical clock: a face-down dial at the centre beneath the vault, inside two
-//   separate counter-rotating rings, with an ivory eye and crimson pupil at its heart
+// - the celestial clock: a face-down engraved dial (Roman numerals, zodiac band, star field)
+//   with two slow hands, inside two clean tilted armillary rings, ivory eye at its heart.
+//   (The earlier generated clock read as a tangle from below; see docs/STATUS.md.)
 // - floating enchanted candles, hovering ancient books, twinkling vault stars
 // All perimeter/overhead: nothing here has colliders or enters the combat floor.
 import { Entity, GltfContainer, GltfNodeModifiers, Material, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
@@ -11,8 +12,8 @@ import { state } from '../game/state'
 const ENV = 'assets/environment/'
 const FX = 'assets/fx/'
 const CLOCK_Y = 24.5
-const CLOCK_SCALE = 15 // 0.6 m model -> 9 m dial
-const FACE_DOWN = Quaternion.fromEulerDegrees(90, 0, 0) // model faces +Z; turned to face the floor
+const DIAL_RADIUS = 6.2
+const NO_SHADOW = { modifiers: [{ path: '', castShadows: false }] }
 const CANDLE_COUNT = 24
 const CANDLE_SCALE = 2.2
 const BOOKS = 12
@@ -22,7 +23,8 @@ const R_WALL = 28.2
 const H_SPRING = 19
 const H_APEX = 35
 
-const rings: { e: Entity; speed: number; tilt: number; angle: number }[] = []
+const rings: { e: Entity; speed: number; tiltX: number; tiltZ: number; angle: number }[] = []
+const hands: { e: Entity; speed: number; angle: number }[] = []
 const candles: { body: Entity; flame: Entity; x: number; z: number; base: number; phase: number }[] = []
 const books: { e: Entity; a: number; r: number; y: number; phase: number; spin: number }[] = []
 const stars: { e: Entity; phase: number; base: number }[] = []
@@ -38,13 +40,26 @@ function model(src: string, pos: Vector3, scale: number, rotation = Quaternion.I
 
 export function initChamber() {
   const c = ARENA.center
-  // Clock mechanism: dial + two distinct rings at different heights and radii.
-  clock = model(ENV + 'astro_clock.glb', Vector3.create(c.x, CLOCK_Y, c.z), CLOCK_SCALE, FACE_DOWN)
-  rings.push({ e: model(ENV + 'astro_rings.glb', Vector3.create(c.x, CLOCK_Y + 0.6, c.z), 34, FACE_DOWN), speed: 2.5, tilt: 0, angle: 0 })
-  rings.push({ e: model(ENV + 'astro_rings.glb', Vector3.create(c.x, CLOCK_Y - 0.9, c.z), 23, FACE_DOWN), speed: -4, tilt: 7, angle: 40 })
+  // Clock mechanism: the dial, two hands beneath it, two armillary rings around it.
+  clock = engine.addEntity()
+  Transform.create(clock, { position: Vector3.create(c.x, CLOCK_Y, c.z), scale: Vector3.create(DIAL_RADIUS, DIAL_RADIUS, DIAL_RADIUS) })
+  GltfContainer.create(clock, { src: ENV + 'celestial_dial.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+  GltfNodeModifiers.create(clock, NO_SHADOW)
+  for (const [len, y, speed, angle] of [[DIAL_RADIUS * 0.55, 0.08, 0.6, 140], [DIAL_RADIUS * 0.82, 0.14, 5, 20]]) {
+    const e = engine.addEntity()
+    Transform.create(e, { position: Vector3.create(c.x, CLOCK_Y - y, c.z), scale: Vector3.create(len * 1.6, 1, len) })
+    GltfContainer.create(e, { src: ENV + 'clock_hand.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+    GltfNodeModifiers.create(e, NO_SHADOW)
+    hands.push({ e, speed, angle })
+  }
+  for (const [radius, speed, tiltX, tiltZ, angle] of [[8.2, 2.2, 16, 0, 0], [10.4, -1.4, 0, -11, 60]]) {
+    const e = model(ENV + 'armillary_ring.glb', Vector3.create(c.x, CLOCK_Y - 0.6, c.z), radius)
+    GltfNodeModifiers.create(e, NO_SHADOW)
+    rings.push({ e, speed, tiltX, tiltZ, angle })
+  }
   // The Watcher's emblem at the heart of the dial: an ivory eye with a crimson pupil, looking down.
-  model(FX + 'orb_ivory.glb', Vector3.create(c.x, CLOCK_Y - 0.55, c.z), 1.5)
-  model(FX + 'orb_crimson.glb', Vector3.create(c.x, CLOCK_Y - 1.25, c.z), 0.55)
+  model(FX + 'orb_ivory.glb', Vector3.create(c.x, CLOCK_Y - 0.35, c.z), 1.1)
+  model(FX + 'orb_crimson.glb', Vector3.create(c.x, CLOCK_Y - 0.88, c.z), 0.42)
   // Silver chain to the apex.
   const chainTop = 34.6
   const chainBottom = CLOCK_Y + 0.8
@@ -96,11 +111,18 @@ function chamberSystem(dt: number) {
   const step = Math.min(dt, 0.1)
   const victory = state.phase === 'victory'
   // At victory time moves forward again: the mechanism races.
-  clockAngle = (clockAngle + (victory ? 90 : 3) * step) % 360
-  if (clock) Transform.getMutable(clock).rotation = Quaternion.multiply(Quaternion.fromEulerDegrees(0, clockAngle, 0), FACE_DOWN)
+  // Slow, elegant movement; at victory the hands and rings race.
+  const race = victory ? 12 : 1
+  clockAngle = (clockAngle + 1.2 * race * step) % 360
+  if (clock) Transform.getMutable(clock).rotation = Quaternion.fromEulerDegrees(0, clockAngle, 0)
+  for (const h of hands) {
+    h.angle = (h.angle + h.speed * race * step) % 360
+    Transform.getMutable(h.e).rotation = Quaternion.fromEulerDegrees(0, h.angle, 0)
+  }
   for (const r of rings) {
-    r.angle = (r.angle + r.speed * (victory ? 8 : 1) * step) % 360
-    Transform.getMutable(r.e).rotation = Quaternion.multiply(Quaternion.fromEulerDegrees(r.tilt * Math.sin(t * 0.1), r.angle, 0), FACE_DOWN)
+    r.angle = (r.angle + r.speed * race * step) % 360
+    const wob = 1 + 0.15 * Math.sin(t * 0.12 + r.angle * 0.01)
+    Transform.getMutable(r.e).rotation = Quaternion.multiply(Quaternion.fromEulerDegrees(r.tiltX * wob, 0, r.tiltZ * wob), Quaternion.fromEulerDegrees(0, r.angle, 0))
   }
   for (const k of candles) {
     const y = k.base + Math.sin(t * 0.8 + k.phase) * 0.25
