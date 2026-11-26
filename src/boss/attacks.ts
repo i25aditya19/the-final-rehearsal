@@ -73,7 +73,7 @@ function glow(e: Entity, hex: string, alpha: number, intensity: number) {
 
 /** Smooth telegraph model (assets/telegraphs, unit radius) with no colliders. */
 const TELE = 'assets/telegraphs/'
-function tele(file: string, parent?: Entity, y = 0.08): Entity {
+function tele(file: string, parent?: Entity, y = 0.16): Entity {
   const e = engine.addEntity()
   Transform.create(e, { parent, position: parent ? Vector3.create(0, y, 0) : HIDDEN, scale: Vector3.Zero() })
   GltfContainer.create(e, { src: TELE + file, visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
@@ -251,7 +251,7 @@ function aimBeam(heading: number, width: number) {
   const g = ATTACKS.gaze
   const rad = (heading * Math.PI) / 180
   const reach = g.range * 0.92
-  const end = Vector3.create(center.x + Math.sin(rad) * reach, 0.05, center.z + Math.cos(rad) * reach)
+  const end = Vector3.create(center.x + Math.sin(rad) * reach, 0.13, center.z + Math.cos(rad) * reach)
   const dir = Vector3.subtract(end, Vector3.create(eye.x, eye.y, eye.z))
   const len = Vector3.length(dir)
   const rot = Quaternion.multiply(Quaternion.lookRotation(Vector3.normalize(dir)), AXIS_FIX)
@@ -341,7 +341,7 @@ function updateAftershock(): boolean {
         continue
       }
       if (!w.hit && p) {
-        const hit = ringSweptHits(p, { center, radius, bandWidth: a.bandWidth, gapCenters: w.gaps, gapDeg: a.gapDeg, jumpClear: a.jumpClear }, w.prevRadius)
+        const hit = ringSweptHits(p, { center, radius, bandWidth: a.bandWidth, gapCenters: w.gaps, gapDeg: a.gapDeg, jumpClear: a.jumpClear }, w.prevRadius, ARENA.floorY)
         if (hit) {
           w.hit = true // one hit per wave
           damagePlayer(a.damage, 'Aftershock')
@@ -367,7 +367,7 @@ function updateAftershock(): boolean {
   const r = active.radius
   const pulse = active.warning ? 0.6 + 0.4 * Math.abs(Math.sin((state.time - active.wave.warnAt) * 9)) : 1
   const band = Transform.getMutable(ringSegs[0])
-  band.position = Vector3.create(center.x, 0.055, center.z)
+  band.position = Vector3.create(center.x, 0.135, center.z)
   band.rotation = Quaternion.fromEulerDegrees(0, active.wave.gaps[0] ?? 0, 0)
   band.scale = Vector3.create(r, (active.warning ? 0.5 : 0.85) * pulse, r)
   // Safe lanes: ivory strips along each gap, from the dais to the wall.
@@ -378,7 +378,7 @@ function updateAftershock(): boolean {
     const len = ARENA.playableRadius - a.startRadius
     const mid = a.startRadius + len / 2
     const tr = Transform.getMutable(lane)
-    tr.position = Vector3.create(center.x + Math.sin(rad) * mid, 0.08, center.z + Math.cos(rad) * mid)
+    tr.position = Vector3.create(center.x + Math.sin(rad) * mid, 0.16, center.z + Math.cos(rad) * mid)
     tr.rotation = Quaternion.fromEulerDegrees(0, g, 0)
     tr.scale = Vector3.create(1.2, 0.01, len)
   })
@@ -491,7 +491,7 @@ function startObservation() {
   const f = ATTACKS.finalObservation
   const R = ARENA.playableRadius
   const tr = Transform.getMutable(obsDanger!)
-  tr.position = Vector3.create(center.x, 0.08, center.z)
+  tr.position = Vector3.create(center.x, 0.16, center.z)
   tr.scale = Vector3.create(R, 1, R)
   safeCenters().forEach((c, i) => {
     const s = Transform.getMutable(obsSafe[i])
@@ -505,7 +505,7 @@ function setObsLook(look: 'warn' | 'blast') {
   if (obsLook === look || !obsDanger) return
   obsLook = look
   // Blast: the danger floor flares (lifted slightly so it reads as a pulse).
-  Transform.getMutable(obsDanger).position = Vector3.create(center.x, look === 'blast' ? 0.25 : 0.08, center.z)
+  Transform.getMutable(obsDanger).position = Vector3.create(center.x, look === 'blast' ? 0.33 : 0.16, center.z)
 }
 
 function updateObservation(): boolean {
@@ -610,7 +610,7 @@ function updateVolley(): boolean {
     if (t < v.warning) {
       const k = (ARENA.daisRadius + 1) * (0.85 + 0.15 * Math.sin(t * 12))
       const tr = Transform.getMutable(volleyWarn)
-      tr.position = Vector3.create(center.x, 0.09, center.z)
+      tr.position = Vector3.create(center.x, 0.17, center.z)
       tr.scale = Vector3.create(k, 1, k)
     } else hide(volleyWarn)
   }
@@ -632,7 +632,7 @@ function updateVolley(): boolean {
     }
     anyActive = true
     Transform.getMutable(b.e).position = Vector3.create(b.x, v.boltHeight, b.z)
-    if (!volleyHit && p && p.y < v.jumpClear) {
+    if (!volleyHit && p && p.y - ARENA.floorY < v.jumpClear) {
       const d = pointSegmentDistance(v3(p.x, v.boltHeight, p.z), v3(b.px, v.boltHeight, b.pz), v3(b.x, v.boltHeight, b.z))
       if (d <= v.hitRadius) {
         volleyHit = true // one hit per volley

@@ -15,8 +15,8 @@ export const ATMOSPHERE = {
   lightIntensity: 40000,
   lightRange: 30,
   /** Ambient grey (sky colours drive the ambient light): readable, never black. */
-  ambient: { zenith: 0.34, horizon: 0.28, nadir: 0.2 }, // raised: 0.2 left wall recesses pitch black in the client
-  sunIntensity: 0.7
+  ambient: { zenith: 0.42, horizon: 0.34, nadir: 0.24 }, // charcoal-to-mid-grey, never crushed black
+  sunIntensity: 0.8
 }
 
 const grey = (v: number, tint = 1.0): ColorGradient => ({ keys: [{ time: 0, color: Color4.create(v, v, v * tint, 1) }] })

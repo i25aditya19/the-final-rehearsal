@@ -128,7 +128,7 @@ function feedbackSystem() {
     const dz = ARENA.center.z - target.pos.z
     const l = Math.hypot(dx, dz) || 1
     const r = Math.min(ARENA.playableRadius - 2, 7)
-    mk.position = Vector3.create(ARENA.center.x + (dx / l) * r, 0.12, ARENA.center.z + (dz / l) * r)
+    mk.position = Vector3.create(ARENA.center.x + (dx / l) * r, 0.2, ARENA.center.z + (dz / l) * r)
     const pulse = 1.6 + 0.25 * Math.sin(s.time * 5)
     mk.scale = Vector3.create(pulse, 1, pulse)
   } else mk.scale = Vector3.Zero()

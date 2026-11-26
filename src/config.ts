@@ -11,6 +11,8 @@ export const ARENA = {
   center: { x: 40, y: 0, z: 40 },
   /** Unobstructed circular playable floor radius. */
   playableRadius: 20,
+  /** Walkable floor height (the floor plane sits above the client's default ground). */
+  floorY: 0.08,
   /** Margin between the playable floor and walls/decoration. */
   borderMargin: 3,
   /** Radius of the central dais (the Watcher hovers above it). */
@@ -55,7 +57,8 @@ export const BOSS = {
  */
 export const WATCHER_MODEL = {
   enabled: true,
-  scale: 1.65,
+  /** Visual scale only (hit volume is BOSS.hitRadius/hitHeight). 1.65 -> 1.85: more imposing. */
+  scale: 1.85,
   body: 'assets/boss/watcher_body.glb',
   helm: 'assets/boss/watcher_helm.glb',
   mask: 'assets/boss/watcher_mask.glb',

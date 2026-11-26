@@ -163,6 +163,18 @@ Checkpoint before this pass: branch `checkpoint-before-polish` (cc0ab0a). Hitbox
 - **Ceiling blend** (creator liked the metallic original and the clean dial): the dial stays in front; the generated clock (metallic 0.55) and ring sit behind it as a large silver backplate, counter-turning; two clean armillary rings outside.
 - Creator: music is good.
 
+## Premium atmosphere pass (2026-11-26 night, creator brief + screenshot)
+
+- **Floor**: still red after raising the GLB, so the floor is now an SDK plane (primitives always render) with the marble texture, faintly self-lit, at y = 0.08 with a collider. `ARENA.floorY`; jump checks for Aftershock/Volley are floor-relative so the rules are unchanged; floor telegraphs and echo runes lifted above it. The GLB floor stays underneath.
+- **Visibility**: ambient raised again (0.42/0.34/0.24), sun 0.8; moonlight shafts (soft ivory gradient quads) lean from the 7 windows into the chamber; windows glow 0.75.
+- **Stone**: pillar/arch smoothing reduced to 2 passes (the stronger pass erased the carvings); textures blurred slightly and contrast-compressed around ash grey (pillars) and charcoal (arches) with silver highlights, removing the baked foil glints. Metal stays on the clock mechanism and halos.
+- **Watcher**: visual scale 1.65 -> 1.85 (hit volume unchanged); mask self-light 0.22 -> 0.36; per-attack wind-ups (Gaze: eye flares and he leans in; Aftershock: hands rise high; Stolen Moment: the hand on the target's side reaches toward it; Blind Spot: halos swell and tip; Final Observation: posture opens, mask widens; Volley: hands circle); idle eye pulse; hits: translucent afterimage flicker, halo instability; a second, smaller pair of hands grows in from phase II.
+- **Clock**: hands sweep forward 9 s then rewind to the same moment; mechanism races during phase transitions, shudders on 3+ echo Convergence hits, rings align on a perfect four-way, expand in phase III; at victory time finally moves forward normally (no rewind).
+- **Phase III**: twelve eyes open around the chamber walls (blink; burn brighter during the Final Observation; close at victory).
+- **Convergence**: golden links thicken with the echo count (second, higher set for 3+), gold beams from every echo into the Watcher, burst scaled by count.
+- **Candles** at five heights (3.2-7.8 m).
+- Tests 43/43; sim unchanged (all bots win, ~160 s); lights 7, particle emitters 8. Not yet seen in the client.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.

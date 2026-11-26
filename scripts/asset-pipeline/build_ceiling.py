@@ -195,3 +195,26 @@ rm.visual = trimesh.visual.TextureVisuals(uv=np.zeros((len(rm.vertices), 2)) + 0
 rm.visual.material = pbr(Image.new('RGB', (4, 4), SILVER), Image.new('RGB', (4, 4), (52, 52, 56)), 0.75)
 export(f'{ENV}/armillary_ring.glb', [('ring', rm)])
 base.resize((512, 512)).save('/tmp/dial_preview.png')
+
+# Moonlight shaft (2026-11-26): a soft ivory gradient quad that leans from a window down into the
+# chamber. Local frame: top edge at the origin, falls 1 unit down and 0.9 inward (+Z); widens.
+def light_shaft():
+    W, H = 64, 256
+    v = np.linspace(0, 1, H)[:, None]               # 0 top .. 1 bottom
+    u = np.linspace(-1, 1, W)[None, :]
+    a = (0.22 * (1 - v) ** 1.6) * np.exp(-(u / 0.62) ** 4)  # fades downward and to the sides
+    rgba = np.zeros((H, W, 4), np.uint8)
+    rgba[..., :3] = IVORY
+    rgba[..., 3] = (np.clip(a, 0, 1) * 255).astype(np.uint8)
+    img = Image.fromarray(rgba, 'RGBA')
+    verts = np.array([[-0.12, 0, 0], [0.12, 0, 0], [0.22, -1, 0.9], [-0.22, -1, 0.9]])
+    faces = np.array([[0, 1, 2], [0, 2, 3]])
+    uv = np.array([[0, 1], [1, 1], [1, 0], [0, 0]])
+    m = trimesh.Trimesh(verts, faces, process=False)
+    m.visual = trimesh.visual.TextureVisuals(uv=uv)
+    mat = trimesh.visual.material.PBRMaterial(baseColorTexture=img, emissiveTexture=img.convert('RGB'), emissiveFactor=[0.6, 0.6, 0.6],
+                                               metallicFactor=0.0, roughnessFactor=1.0, alphaMode='BLEND', doubleSided=True)
+    m.visual.material = mat
+    export(f'{ENV}/light_shaft.glb', [('shaft', m)])
+
+light_shaft()

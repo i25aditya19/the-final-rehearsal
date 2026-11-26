@@ -97,7 +97,17 @@ function tryConvergence() {
     if (ordered.length === 2 && i === 1) break
     const a = ordered[i]
     const b = ordered[(i + 1) % ordered.length]
-    spawnTracer(v3(a.pos.x, 0.3, a.pos.z), v3(b.pos.x, 0.3, b.pos.z), COLORS.syncGold, false, { width: 0.1, seconds: 1.1, intensity: 4 })
+    // Golden links between the synchronized echoes, thicker the larger the Convergence.
+    const w = 0.08 + 0.035 * group.length
+    spawnTracer(v3(a.pos.x, 0.3, a.pos.z), v3(b.pos.x, 0.3, b.pos.z), COLORS.syncGold, false, { width: w, seconds: 1.1, intensity: 4 + group.length })
+    if (group.length >= 3) spawnTracer(v3(a.pos.x, 1.6, a.pos.z), v3(b.pos.x, 1.6, b.pos.z), COLORS.syncGold, false, { width: w * 0.6, seconds: 0.9, intensity: 5 })
+  }
+  // Visual only: a gold beam from every synchronized echo into the Watcher, and a burst on him
+  // that grows with the number of echoes (a perfect four is the strongest moment in the fight).
+  if (group.length >= 2) {
+    const bossAt = { x: ARENA.center.x, y: 4.4, z: ARENA.center.z }
+    for (const e of group) spawnTracer(v3(e.pos.x, 1.4, e.pos.z), bossAt, COLORS.syncGold, false, { width: 0.1 + 0.05 * group.length, seconds: 0.55, intensity: 5 + 1.5 * group.length })
+    burst(bossAt, COLORS.syncGold, 0.6 + 0.35 * group.length)
   }
 
   const out = hitBoss('convergence', convergenceDamage(hits, CONVERGENCE.damageByCount, IMPRINT.echoDamage), { hits, sectors: hitSectors.size }, { x: ARENA.center.x, y: 4, z: ARENA.center.z })
