@@ -223,5 +223,6 @@ def music(final=False, sec=32.0):
     return out[: n - xf]
 
 
-write('music_chamber', music(False), 0.55, 3)
-write('music_final', music(True), 0.6, 3)
+# The two early music loops were superseded by the adaptive score (build_score.py).
+# write('music_chamber', music(False), 0.55, 3)
+# write('music_final', music(True), 0.6, 3)

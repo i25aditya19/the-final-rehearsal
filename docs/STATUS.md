@@ -148,6 +148,14 @@ Checkpoint before this pass: branch `checkpoint-before-polish` (cc0ab0a). Hitbox
 - Ceiling: procedural celestial dial (Roman numerals, zodiac band, star field, compass rose), two slow hands, two clean armillary rings; replaces the tangled generated clock. Nothing on the ceiling casts shadows.
 - Not yet seen in the client after this change.
 
+## Adaptive score and sound (2026-11-26)
+
+- **Score** (original, `build_score.py`, D minor, stereo OGG 32 kHz, about 2.2 MB): chamber entry (distant choir, clock, sparse piano), boss introduction stinger (organ swell + timpani roll to a full hit), phase I (strings ostinato, controlled timpani), phase II (faster strings, melody, organ, heavier drums), final phase (choir, full organ, cinematic drums), victory (D major resolution with bells), defeat (fading strings, a clock that slows and stops). Quiet ambience loop: distant bells, clock mechanism, faint whispers, air.
+- **Mixing** (`src/audio/audio.ts`): all loops start once at load, muted, and are crossfaded by volume (2.5 s) from game state; stingers share one source, so nothing overlaps or restarts; a retry fades a stale stinger. Music ducks during phase transitions.
+- **New cues**: spell impact, echo creation, echo expiration, UI click; existing cues for cast, echo replay, Convergence ready/fire, damage, attack warnings (same frame as the telegraph), phase changes, hurt, victory, defeat.
+- **Controls**: HUD sound panel (bottom right): music and effects levels, mute. Not persisted between visits.
+- **Checks**: `npm run sim:audio` (forced defeat, wait, retry, mute, volume: loops and stingers correct, no duplicate sources); `AUDIO_LOG=1 npm run sim -- 1` logs every sound and the mix across a full fight. **Not yet heard by a human in the client.**
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.

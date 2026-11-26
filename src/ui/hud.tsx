@@ -12,6 +12,7 @@ import { objectiveText } from '../game/phases'
 import { oldestReplaceable, readyGroup, timeToFire } from '../echoes/echoLogic'
 import { readyWindow } from '../game/assist'
 import { sectorOf } from '../combat/aim'
+import { LEVEL_STEPS, audioSettings, uiClick } from '../audio/audio'
 
 const c = (hex: string, a = 1) => {
   const k = Color4.fromHexString(hex)
@@ -35,6 +36,7 @@ function Hud() {
       <Subtitle />
       {isActive() ? <ActiveHud /> : <Results />}
       <Entrance />
+      <SoundPanel />
       {UI.showDebug ? <Debug /> : null}
     </UiEntity>
   )
@@ -201,14 +203,20 @@ function Results() {
             uiTransform={{ width: 260, height: 46, justifyContent: 'center', margin: { left: 6, right: 6 }, ...frame }}
             uiBackground={{ color: c(won ? COLORS.syncGold : COLORS.ivory, 0.92) }}
             uiText={{ value: won ? 'REHEARSE AGAIN' : 'REWRITE THE MOMENT', fontSize: 17, font: 'serif', color: c(COLORS.obsidian) }}
-            onMouseDown={() => retry()}
+            onMouseDown={() => {
+              uiClick()
+              retry()
+            }}
           />
           {offerGuided ? (
             <UiEntity
               uiTransform={{ width: 260, height: 46, justifyContent: 'center', margin: { left: 6, right: 6 }, ...frame }}
               uiBackground={{ color: c(COLORS.echoCyan, 0.85) }}
               uiText={{ value: 'REHEARSE WITH GUIDANCE', fontSize: 15, font: 'serif', color: c(COLORS.obsidian) }}
-              onMouseDown={() => retryGuided()}
+              onMouseDown={() => {
+                uiClick()
+                retryGuided()
+              }}
             />
           ) : null}
         </UiEntity>
@@ -426,5 +434,49 @@ function Debug() {
       uiBackground={{ color: Color4.create(0, 0, 0, 0.5) }}
       uiText={{ value: `debug · last: ${last} · hits ${state.hits}/${state.shots}${conv} · sector ${sector} · F refill · 1 mask`, fontSize: 11, color: c(COLORS.ash) }}
     />
+  )
+}
+
+// Sound panel (bottom right): music and effects levels, mute. Click with the cursor free
+// (Esc or right-click releases it).
+function SoundPanel() {
+  const step = 1 / LEVEL_STEPS
+  const change = (key: 'music' | 'sfx', d: number) => {
+    audioSettings[key] = Math.round(Math.max(0, Math.min(1, audioSettings[key] + d)) * LEVEL_STEPS) / LEVEL_STEPS
+    if (d !== 0 && audioSettings.muted) audioSettings.muted = false
+    uiClick()
+  }
+  const btn = (label: string, onClick: () => void, w = 22) => (
+    <UiEntity
+      uiTransform={{ width: w, height: 20, justifyContent: 'center', margin: { left: 2, right: 2 }, ...frame }}
+      uiBackground={{ color: c(COLORS.obsidian, 0.85) }}
+      uiText={{ value: label, fontSize: 12, color: c(COLORS.ivory) }}
+      onMouseDown={onClick}
+    />
+  )
+  const row = (name: string, key: 'music' | 'sfx') => (
+    <UiEntity uiTransform={{ width: '100%', height: 24, flexDirection: 'row', alignItems: 'center' }}>
+      <UiEntity uiTransform={{ width: 58, height: 20 }} uiText={{ value: name, fontSize: 11, font: 'serif', color: c(COLORS.silver), textAlign: 'middle-left' }} />
+      {btn('-', () => change(key, -step))}
+      <UiEntity uiTransform={{ width: 70, height: 8, flexDirection: 'row', margin: { left: 4, right: 4 } }} uiBackground={{ color: c(COLORS.silver, 0.18) }}>
+        <UiEntity uiTransform={{ width: `${Math.round((audioSettings.muted ? 0 : audioSettings[key]) * 100)}%`, height: '100%' }} uiBackground={{ color: c(key === 'music' ? COLORS.ivory : COLORS.echoCyan, 0.85) }} />
+      </UiEntity>
+      {btn('+', () => change(key, step))}
+    </UiEntity>
+  )
+  return (
+    <UiEntity
+      uiTransform={{ positionType: 'absolute', position: { right: 14, bottom: 14 }, width: 230, height: 84, flexDirection: 'column', padding: { left: 8, right: 8, top: 4, bottom: 4 }, ...frame }}
+      uiBackground={{ color: PANEL }}
+    >
+      {row('MUSIC', 'music')}
+      {row('EFFECTS', 'sfx')}
+      <UiEntity uiTransform={{ width: '100%', height: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' }}>
+        {btn(audioSettings.muted ? 'UNMUTE' : 'MUTE', () => {
+          audioSettings.muted = !audioSettings.muted
+          if (!audioSettings.muted) uiClick()
+        }, 74)}
+      </UiEntity>
+    </UiEntity>
   )
 }

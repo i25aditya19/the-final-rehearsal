@@ -11,6 +11,19 @@ import { corruptionAnchor, corruptionDebug } from '../src/boss/corruption'
 import { readyGroup } from '../src/echoes/echoLogic'
 import { sectorOf } from '../src/combat/aim'
 import { retry } from '../src/game/session'
+import { AudioSource } from '@dcl/sdk/ecs'
+import { audioDebug } from '../src/audio/audio'
+
+// AUDIO_LOG=1: print every sound started and the music mix every few seconds.
+const AUDIO_LOG = !!process.env.AUDIO_LOG
+if (AUDIO_LOG) {
+  const orig = AudioSource.playSound.bind(AudioSource)
+  ;(AudioSource as any).playSound = (e: any, src: string) => {
+    console.log(`  [${state.time.toFixed(1)}s] ${src.replace('assets/audio/', '').replace('.ogg', '')} vol ${AudioSource.get(e).volume?.toFixed(2)}`)
+    return orig(e, src)
+  }
+}
+let lastMixLog = -10
 
 type Profile = { name: string; speed: number; reaction: number; aimErrDeg: number; dodgeSkill: number }
 const PROFILES: Profile[] = [
@@ -160,6 +173,10 @@ async function runOne(p: Profile, seed: number): Promise<Result> {
     if (t >= state.convergenceReadyAt && ready.length >= need && sectors >= wantSectors && windowOk) press(InputAction.IA_PRIMARY)
 
     await engine.update(DT)
+    if (AUDIO_LOG && state.time - lastMixLog >= 5) {
+      lastMixLog = state.time
+      console.log(`  mix @${state.time.toFixed(0)}s phase ${state.bossPhase} ${state.stage}: ${JSON.stringify(audioDebug())}`)
+    }
     const cm = corruptionDebug().mode
     if (cm !== corr.prev) {
       if (cm === 'warning') corr.started++

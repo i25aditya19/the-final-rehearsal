@@ -10,7 +10,8 @@
     "upgrade-sdk:next": "npm install --save-dev @dcl/sdk@next",
     "arena": "tsx scripts/build-arena.ts",
     "test": "tsx --test tests/*.test.ts",
-    "sim": "NODE_PATH=sim/node_path tsx sim/fight.ts"
+    "sim": "NODE_PATH=sim/node_path tsx sim/fight.ts",
+    "sim:audio": "NODE_PATH=sim/node_path tsx sim/audio_endings.ts"
   },
   "devDependencies": {
     "@dcl/js-runtime": "7.33.0",
