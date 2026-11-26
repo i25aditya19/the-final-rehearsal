@@ -9,6 +9,7 @@ import { launch } from '../effects/projectiles'
 import { burst } from '../effects/vfx'
 import { isActive, say, speak, state } from '../game/state'
 import { hitBoss } from '../game/phases'
+import { onReset } from '../game/session'
 import { V3, headingDeg, sub, v3 } from '../math/vec'
 import { Echo, EchoRules, convergenceDamage, placeEcho, readyGroup, scheduleNext } from './echoLogic'
 
@@ -29,6 +30,7 @@ const rules: EchoRules = {
 
 export function initEchoes() {
   engine.addSystem(echoSystem)
+  onReset(resetConvergenceCharge)
 }
 
 /** Called by Imprint after a direct cast: leave (or refresh) an echo where the caster stood. */
@@ -58,7 +60,27 @@ function echoSystem() {
     scheduleNext(e, state.time, ECHO.repeatInterval)
   }
 
+  // Synchronization charge in progress: break on a hit, otherwise fire together at the end.
+  if (charge) {
+    if (state.playerHitAt > charge.startedAt) {
+      charge = undefined
+      state.syncChargeUntil = 0
+      say('Synchronization broken', 1.6)
+    } else if (state.time >= charge.until) {
+      const group = state.echoes.filter((e) => charge!.ids.includes(e.id) && !e.corrupted)
+      charge = undefined
+      state.syncChargeUntil = 0
+      if (group.length >= CONVERGENCE.minEchoes) fireConvergence(group)
+      else say('Synchronization lost: an echo was taken')
+    }
+  }
+
   if (state.time > 0.4 && inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) tryConvergence()
+}
+
+let charge: { ids: number[]; startedAt: number; until: number } | undefined
+export function resetConvergenceCharge() {
+  charge = undefined
 }
 
 /** E: fire every ready echo together. Invalid attempts never consume the cooldown. */
@@ -67,13 +89,26 @@ function tryConvergence() {
     say(`Convergence recharging (${Math.ceil(state.convergenceReadyAt - state.time)}s)`)
     return
   }
+  if (charge) return
   const group = readyGroup(state.echoes, state.time, readyWindow())
   if (group.length < CONVERGENCE.minEchoes) {
-    const friendly = state.echoes.filter((e) => !e.corrupted).length
-    if (friendly < CONVERGENCE.minEchoes) say('Convergence needs two echoes. Cast from two places.')
-    else say(`Only ${group.length} echo ready. Press E when the runes glow gold.`)
+    const friendly = state.echoes.filter((e) => !e.corrupted)
+    if (friendly.length < CONVERGENCE.minEchoes) {
+      const corrupted = state.echoes.some((e) => e.corrupted)
+      say(corrupted ? 'Reclaim your corrupted echo, or create another echo.' : 'Create another echo: cast from a second place.')
+      return
+    }
+    // Not ready together: align them. They charge, then fire as one (survive the charge).
+    charge = { ids: friendly.map((e) => e.id), startedAt: state.time, until: state.time + CONVERGENCE.chargeSeconds }
+    state.syncChargeUntil = charge.until
+    for (const e of friendly) e.nextFire = charge.until + 0.05 // hold their own repeats for the charge
+    say('SYNCHRONIZING  ·  hold on', CONVERGENCE.chargeSeconds)
     return
   }
+  fireConvergence(group)
+}
+
+function fireConvergence(group: Echo[]) {
 
   const target = bossHitVolume()
   const hitSectors = new Set<number>()

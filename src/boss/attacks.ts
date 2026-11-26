@@ -3,7 +3,7 @@
 // recovery between them. Visuals are pooled primitives; hit tests are pure (attackMath.ts).
 import { Entity, GltfContainer, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
-import { ARENA, ATTACKS, COLORS } from '../config'
+import { ARENA, ATTACKS, COLORS, SESSION } from '../config'
 import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
 import { distXZ, headingDeg, sub, v3 } from '../math/vec'
 import { damagePlayer, isActive, say, speak, state } from '../game/state'
@@ -178,7 +178,11 @@ function sampleSignals(): Signals {
 function nextKind(): AttackKind | undefined {
   const sig = sampleSignals()
   const allowed = SEQUENCES[state.bossPhase].filter((k) => state.stage !== 'gate' || GATE_ALLOWED.includes(k)) as AdaptiveKind[]
-  const pick = chooseAdaptive(sig, allowed, history as AdaptiveKind[], lastWasAdaptive)
+  // Phase III is the final exam of the player's formation: he does not adaptively steal from it
+  // (Stolen Moment still comes in its normal turn). Measured: adaptive steals there pushed the
+  // final phase from ~100 s to ~160 s and broke the three-sided Convergence repeatedly.
+  const adaptAllowed = state.bossPhase === 3 ? allowed.filter((k) => k !== 'stolen') : allowed
+  const pick = chooseAdaptive(sig, adaptAllowed, history as AdaptiveKind[], lastWasAdaptive)
   lastWasAdaptive = !!pick
   const kind = pick ? (pick.kind as AttackKind) : fixedKind()
   if (pick) speak(`adapt_${pick.reason}`, ADAPTIVE_LINES[pick.reason], 3)
@@ -215,7 +219,17 @@ function fixedKind(): AttackKind | undefined {
   return 'gaze'
 }
 
+let seenFourWay = 0
 function attackSystem() {
+  // A perfect four-sided Convergence staggers him: no new attack for a few seconds.
+  if (state.fourWay !== seenFourWay) {
+    if (state.fourWay > seenFourWay) {
+      state.staggerUntil = state.time + SESSION.perfectStaggerSeconds
+      nextAttackAt = Math.max(nextAttackAt, state.staggerUntil)
+      say('PERFECT CONVERGENCE  ·  THE WATCHER STAGGERS', 2.5)
+    }
+    seenFourWay = state.fourWay
+  }
   if (!isActive() || state.stage === 'transition') {
     if (current) cancelCurrent()
     if (state.stage === 'transition') nextAttackAt = Math.max(nextAttackAt, state.time + 2.5)

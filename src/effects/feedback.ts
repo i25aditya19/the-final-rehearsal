@@ -9,6 +9,7 @@ import { say, speak, state } from '../game/state'
 import { corruptionDebug } from '../boss/corruption'
 import { onReset } from '../game/session'
 import { spawnTracer } from './tracers'
+import { attackDebug } from '../boss/attacks'
 import { burst, setVictoryMotes } from './vfx'
 
 const POOL = 6
@@ -30,6 +31,7 @@ let prevCorr = 'idle'
 let corruptionsSeen = 0
 let lastTaunt = -100
 let deflectStreak = 0
+const hints = { cast: false, second: false, spread: false }
 let lastDeflect = -10
 let lowHpSaid = false
 
@@ -95,6 +97,7 @@ function feedbackSystem() {
     prevCorr = 'idle'
     deflectStreak = 0
     lastDeflect = -10
+    hints.cast = hints.second = hints.spread = false
   }
   const player = Transform.getOrNull(engine.PlayerEntity)?.position
   // Cast flare at the caster's hand.
@@ -103,6 +106,20 @@ function feedbackSystem() {
   // Phase transitions: a golden flash around the Watcher.
   if (s.stage === 'transition' && prevStage !== 'transition') burst({ x: ARENA.center.x, y: BOSS.hoverHeight + 1.5, z: ARENA.center.z }, COLORS.syncGold, 2.6)
   // His voice reacts to what you do (subtitles; short and rare).
+  // Help only when the player seems stuck (each hint once per run, never over another message).
+  const quiet = s.time > s.messageUntil + 1
+  if (quiet && s.phase === 'active') {
+    if (s.shots === 0 && s.time > 7 && !hints.cast) {
+      hints.cast = true
+      say('Left click to cast at The Watcher. Your spell leaves an echo where you stand.', 4)
+    } else if (s.echoes.length === 1 && s.time - s.echoes[0].placedAt > 14 && !hints.second) {
+      hints.second = true
+      say('Move, then cast again: every place you cast from keeps repeating your spell.', 4)
+    } else if (attackDebug().kind === 'blindspot' && s.echoes.length >= 2 && new Set(s.echoes.map((e) => Math.floor(((Math.atan2(e.pos.x - ARENA.center.x, e.pos.z - ARENA.center.z) * 180) / Math.PI + 405) / 90) % 4)).size === 1 && !hints.spread) {
+      hints.spread = true
+      say('All your echoes stand on one side. Spread them around him.', 3.5)
+    }
+  }
   // Event-driven lines (each at most once per run unless noted; never over another line).
   const free = s.time > s.subtitleUntil
   if (s.deflectAt !== prevDeflect) {
@@ -135,6 +152,8 @@ function feedbackSystem() {
   prevStage = s.stage
   // Teach the redirect: the first two times an echo is turned, mark where to stand.
   const cd = corruptionDebug()
+  // A stolen moment begins: first time only, name the counter.
+  if (cd.mode === 'warning' && prevCorr !== 'warning' && corruptionsSeen === 0) say('He is stealing an echo: shoot the crimson anchor above it to release it', 3.5)
   if (cd.mode === 'corrupted' && prevCorr !== 'corrupted') {
     corruptionsSeen++
     if (corruptionsSeen <= 2) say('Stand on the pale mark: the Watcher between you and the crimson echo takes its spell', 4)

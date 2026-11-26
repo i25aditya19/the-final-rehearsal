@@ -100,10 +100,13 @@ export function corruptionAnchor(): { center: V3; radius: number } | undefined {
 export function strikeAnchor() {
   const e = target()
   if (!e || mode === 'idle') return
-  burst(v3(e.pos.x, CORRUPTION.anchorHeight, e.pos.z), COLORS.echoCyan, 1.4)
-  say(mode === 'warning' ? 'Moment protected' : 'Moment reclaimed', 1.8)
+  burst(v3(e.pos.x, CORRUPTION.anchorHeight, e.pos.z), COLORS.echoCyan, mode === 'warning' ? 2.2 : 1.4)
+  say(mode === 'warning' ? 'MOMENT RELEASED' : 'Moment reclaimed', 1.8)
+  const released = mode === 'warning'
   if (mode !== 'warning') speak('reclaimed', 'How did you take it back?', 3)
   restore(e)
+  // Released from his grip: the echo answers at once.
+  if (released) e.nextFire = state.time + 0.35
 }
 
 function restore(e: Echo) {
@@ -131,6 +134,9 @@ export function updateCorruption(): boolean {
     return true
   }
   if (mode === 'warning') {
+    // He suspends the echo's cycle while he pulls it toward him: it cannot repeat until the
+    // player releases it (shoot the anchor) or it turns.
+    e.nextFire = Math.max(e.nextFire, state.time + 0.2)
     if (state.time - modeAt >= CORRUPTION.warning) {
       e.corrupted = true
       mode = 'corrupted'

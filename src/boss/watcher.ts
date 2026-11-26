@@ -22,7 +22,7 @@ import {
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA, BOSS, COLORS, UI, WATCHER_MODEL as M } from '../config'
 import { HitCylinder } from '../combat/aim'
-import { isActive, state } from '../game/state'
+import { falseVictory, isActive, state } from '../game/state'
 import { onReset } from '../game/session'
 import { attachBossAura, burst } from '../effects/vfx'
 import { V3 } from '../math/vec'
@@ -291,7 +291,9 @@ function watcherSystem(dt: number) {
   const bob = victory && te < 2.2 ? Math.sin(state.endedAt * 1.1) * 0.14 : Math.sin(t * 1.1) * 0.14
   // Phase III: abrupt, unsettled movement.
   const jitter = state.bossPhase === 3 && isActive() ? Math.sin(t * 13) * Math.max(0, Math.sin(t * 0.9)) * 0.08 : 0
-  tr.position.y = BOSS.hoverHeight + bob - sink + jitter
+  // false victory: he hangs motionless, slightly lowered
+  const fvb = falseVictory()
+  tr.position.y = fvb?.still ? BOSS.hoverHeight - 0.35 : BOSS.hoverHeight + bob - sink + jitter
   const frozen = victory
 
   // Glide-turn to face the player.
@@ -364,8 +366,9 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
     const dbg = attackDebug()
     const rep = dbg.kind === 'aftershock' && dbg.waves.length > 1 ? dbg.waves[1] : undefined
     const repeating = rep && t >= rep.warnAt && t < rep.startAt + 0.9
-    const transStart = state.stage === 'transition' ? t - state.stageStartedAt : -1
-    const blinking = transStart >= 0 && transStart < 0.9
+    const fvNow = falseVictory()
+    const transStart = state.stage === 'transition' ? (fvNow ? fvNow.e - 3.3 : t - state.stageStartedAt) : -1
+    const blinking = transStart >= 0 && transStart < (fvNow ? 1.7 : 0.9)
     const on = !frozen && (!!repeating || blinking)
     setShown(crimsonGhost, on)
     if (on) {
@@ -408,19 +411,24 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
   const victoryShrink = frozen ? Math.max(0, 1 - Math.max(0, te - 3.0) / 2.5) : 1
   const s = M.scale * victoryShrink * (flashing ? 0.97 : 1)
   mt.scale = Vector3.create(flashing ? s * 1.06 : s, s, flashing ? s * 1.06 : s)
-  mt.position = Vector3.create(jolt, 0, -a * 0.25 + aO * 0.3)
+  // Stagger after a perfect Convergence: he sags and tips back, halos slow.
+  const stag = t < state.staggerUntil ? Math.min(1, (state.staggerUntil - t) / 0.6, (t - (state.staggerUntil - 3.5)) / 0.25) : 0
+  mt.position = Vector3.create(jolt, -0.45 * stag, -a * 0.25 + aO * 0.3 - 0.4 * stag)
   // Lean in toward the player while winding up (Gaze: further); open up and back for the Observation.
-  mt.rotation = Quaternion.fromEulerDegrees(a * 8 + aG * 7 - aO * 14, 0, jolt * 10)
+  mt.rotation = Quaternion.fromEulerDegrees(a * 8 + aG * 7 - aO * 14 - 12 * stag, 0, jolt * 10 + 5 * stag)
 
   // The Archive. Phase II: rings fall out of sync. Phase III: they expand and race.
   // Winding up an attack spins them faster. Victory: they freeze, then burst apart.
   halos.forEach((h, i) => {
     const ht = Transform.getMutable(h.entity)
     if (haloBase[i] === undefined) haloBase[i] = ht.scale.x
-    let speed = h.speed * (1 + 2.5 * a) * (flashing ? 1.8 : 1)
+    const stagNow = t < state.staggerUntil ? 0.2 : 1
+    const rewindNow = falseVictory()?.rewind ? -9 : 1
+    let speed = h.speed * (1 + 2.5 * a) * (flashing ? 1.8 : 1) * stagNow * rewindNow
     if (phase === 2) speed *= 1 + 0.6 * Math.sin(t * (0.7 + i * 0.4) + i)
     if (phase === 3) speed *= 1.8
-    if (!frozen) haloAngle[i] = (haloAngle[i] + speed * dt) % 360
+    // the false victory holds the halos dead still (then they rewind)
+    if (!frozen && !falseVictory()?.still) haloAngle[i] = (haloAngle[i] + speed * dt) % 360
     const wobble = phase >= 2 ? 6 + 4 * phase : 3
     const unstable = flashing ? Math.sin(t * 60 + i) * 6 : 0
     ht.rotation = Quaternion.fromEulerDegrees(h.tilt + Math.sin(t * 0.4 + i) * wobble + aB * (25 + i * 10) + unstable, Math.sin(t * 0.3 + i * 2) * (wobble + 1), haloAngle[i])

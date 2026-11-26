@@ -31,7 +31,11 @@ export const SESSION = {
   /** Largest dt a single frame may advance the simulation (protects against hitches). */
   maxFrameDt: 0.1,
   /** Pause between phases (no damage, timers frozen). */
-  transitionSeconds: 3
+  transitionSeconds: 3,
+  /** Phase II -> III: the false victory (he falls still, music fades, then rewinds). */
+  finalTransitionSeconds: 6.5,
+  /** A perfect four-sided Convergence staggers him: no new attack for this long. */
+  perfectStaggerSeconds: 3.5
 } as const
 
 export const PLAYER = {
@@ -132,6 +136,10 @@ export const CONVERGENCE = {
   /** Echoes whose next cast is due within this window may join a Convergence. */
   readyWindow: 1,
   minEchoes: 2,
+  /** Synchronization charge: E with 2+ friendly echoes that are not ready aligns them, then they
+   *  fire together after this many seconds. A hit on the player during the charge breaks it.
+   *  Natural timing (runes already gold) stays instant and uninterruptible. */
+  chargeSeconds: 1.3,
   /** Aggregate damage for 2, 3 and 4 participating echoes (replaces individual echo hits). */
   damageByCount: { 2: 12, 3: 24, 4: 40 } as Record<number, number>
 } as const

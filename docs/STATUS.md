@@ -175,6 +175,29 @@ Checkpoint before this pass: branch `checkpoint-before-polish` (cc0ab0a). Hitbox
 - **Candles** at five heights (3.2-7.8 m).
 - Tests 43/43; sim unchanged (all bots win, ~160 s); lights 7, particle emitters 8. Not yet seen in the client.
 
+## Competitive gameplay pass (2026-11-26 night, creator briefs "Competition-level gameplay" + "Final refinement")
+
+Audit: already implemented and kept (echo rules 4 slots / 4 s / 1 s cooldown / replace oldest / refresh near; readiness and Convergence 12/24/40 replacing echo hits; invalid E never consumes the cooldown; Gaze tracks then locks; Aftershock repeats after 4 s; Stolen Moment with anchor interrupt, reclaim, hostile shot and redirect; Blind Spot with visible deflection; Final Observation 3 echoes / 3 sectors; guided mode; mastery score; achievements; retry in under a second; entrance card).
+
+New:
+- **Adaptive Watcher** (`src/boss/adaptive.ts`, unit-tested): still player -> Gaze; echoes stacked on one side -> Blind Spot; strong spread formation -> Stolen Moment (phase II only). Only attacks the phase already uses; adapts on at most every other attack; never three identical attacks; repeated hits earn +2.5 s recovery. Announces itself once per kind in a line.
+- **Synchronization charge**: E with 2+ friendly echoes that are not ready aligns them for 1.3 s (`CONVERGENCE.chargeSeconds`), then they fire together; a hit breaks it; natural timing stays instant. Echoes can no longer be stuck out of phase.
+- **Stolen Moment suspends** the target echo's cycle during the warning; shooting the anchor releases it (burst, "MOMENT RELEASED", it fires at once).
+- **Perfect Convergence stagger**: 3.5 s without a new attack, he sags and his halos slow.
+- **False victory** before phase III (6.5 s): he falls still, halos and clock stop, the music falls away; "Did you really believe this was the first time?"; clock and halos rewind with his crimson afterimage; the final theme surges in. Formation, health and progress untouched; no attacks.
+- **Crimson temporal afterimage** of the Watcher performs the repeated Aftershock.
+- He **glances at each new echo**.
+- **Dialogue** per brief, event-driven: There you are. Again / You are multiplying moments / Predictable (3 blocked spells in 6 s) / You were never meant to learn that / Your past does not belong to you / How did you take it back? / Impossible / Another moment for my collection (player <= 30 HP) / I WILL NOT LOOK AWAY / A moment I could not foresee... Lines never overwrite one another.
+- **Contextual help** only when stuck: no cast after 7 s; one echo for 14 s; all echoes on one side during the Blind Spot; first Stolen Moment names the anchor.
+- **Victory**: music cuts, a heartbeat in the silence, then the resolution theme. **Echo notes**: each slot sings its own note of a D-minor chord.
+- **Results**: THE FINAL REHEARSAL / Time moves forward again; A MOMENT LOST / The past can always be rewritten (phase reached, time survived, best Convergence); ranks C Apprentice, B Timeweaver, A Master of Moments, S The Unforeseen.
+- Retries skip the title card and the introduction stinger.
+
+Balance finding and fix: adaptive Stolen Moment in phase III pushed the final phase from ~100 s to ~160 s (12 steals per run); removed there.
+
+Tests executed (headless, real scene code): unit 50/50; `npm run sim` all bot profiles 6/6 wins, 161-172 s; `npm run sim:qa` 7/7 (10 consecutive restarts clean; no timers survive a restart; charge fires; hit breaks charge without cooldown; false victory keeps formation and deals no damage; no damage after victory; still player draws the Gaze); `npm run sim:audio` (10 sources, no duplicates). No sync code in the scene (0 syncEntity/MessageBus): each visitor runs their own encounter; **not tested with two real visitors**.
+Not possible here: personal best across visits (no local storage API in scenes; it persists within a session), human playtest, in-client visuals and audio.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.

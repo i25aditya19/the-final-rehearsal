@@ -14,7 +14,7 @@
 import { AudioSource, Entity, Transform, engine } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { readyWindow } from '../game/assist'
-import { state } from '../game/state'
+import { falseVictory, state } from '../game/state'
 import { attackDebug } from '../boss/attacks'
 import { corruptionDebug } from '../boss/corruption'
 import { readyGroup } from '../echoes/echoLogic'
@@ -44,6 +44,7 @@ let stinger: Entity
 let stingerName: keyof typeof STINGER_BASE | '' = ''
 let stingerLevel = 0
 let stingerWritten = -1
+let victoryStep = 0
 
 function sourceEntity(): Entity {
   const e = engine.addEntity()
@@ -114,6 +115,13 @@ function musicTargets(): Record<Loop, number> {
   } else {
     const k: Loop = s.bossPhase === 3 ? 'score_final' : s.bossPhase === 2 ? 'score_p2' : 'score_p1'
     t[k] = s.stage === 'transition' ? 0.55 : 1 // duck under the phase-change sound
+    const fv = falseVictory()
+    if (fv) {
+      // false victory: the music falls away; the final theme surges in with the rewind
+      t[k] = 0
+      t.ambience = fv.still ? 0.35 : 0.6
+      if (fv.e >= 3.3) t.score_final = 1
+    }
     t.ambience = s.bossPhase === 3 ? 0.5 : 0.8
   }
   return t
@@ -125,7 +133,8 @@ function mixMusic(dt: number) {
   const step = Math.min(0.1, dt) / CROSSFADE
   for (const [name, L] of loops) {
     const goal = targets[name]
-    L.level += Math.sign(goal - L.level) * Math.min(Math.abs(goal - L.level), step * (goal < L.level && state.phase === 'defeat' ? 1.6 : 1))
+    const fast = goal < L.level && (state.phase === 'defeat' ? 1.6 : state.phase === 'victory' ? 6 : 1)
+    L.level += Math.sign(goal - L.level) * Math.min(Math.abs(goal - L.level), step * (fast || 1))
     const vol = L.level * BASE[name] * g
     if (Math.abs(vol - L.written) > 0.002 || (vol === 0 && L.written !== 0)) {
       L.written = vol
@@ -155,15 +164,30 @@ function audioSystem(dt: number) {
       gazeStage: 'off', waveWarn: 0, corruption: 'idle', ready: 0, runId: s.runId, bossFlash: 0, deflect: s.deflectAt, hit: s.playerHitAt,
       echoIds: [], introPlayed: false
     })
+    victoryStep = 0
   }
   if (!prev.introPlayed && s.phase === 'active' && s.time >= INTRO_AT) {
     prev.introPlayed = true
-    playStinger('score_intro')
+    if (s.runId === 1) playStinger('score_intro') // the introduction plays once, not on every retry
+  }
+  // Victory: the music cuts out, a single heartbeat in the silence, then the resolution.
+  if (s.phase === 'victory' && victoryStep === 1 && s.time - s.endedAt >= 0.55) {
+    victoryStep = 2
+    sfx('heartbeat', 1, 1)
+  }
+  if (s.phase === 'victory' && victoryStep === 2 && s.time - s.endedAt >= 1.8) {
+    victoryStep = 3
+    sfx('victory', 0.8)
+    playStinger('score_victory')
   }
 
   // Player magic
   if (s.shots > prev.shots) sfx('cast', 0.8)
-  if (s.echoRepeats > prev.echoRepeats) sfx('echo', 0.45, 0.15)
+  // Each echo slot sings its own note of a D-minor chord, so synchronized echoes form a harmony.
+  if (s.echoRepeats > prev.echoRepeats) {
+    const firing = s.echoes.findIndex((e) => s.time - e.lastFired < 0.05)
+    sfx('echo', 0.45, 0.15, [1, 1.189, 1.498, 2][Math.max(0, firing) % 4])
+  }
   const ids = s.echoes.map((e) => e.id)
   if (ids.some((id) => !prev.echoIds.includes(id))) sfx('echo_form', 0.55, 0.1)
   if (s.phase === 'active' && prev.echoIds.some((id) => !ids.includes(id))) sfx('echo_fade', 0.45, 0.2)
@@ -206,8 +230,7 @@ function audioSystem(dt: number) {
   if (s.stage === 'fight' && prev.stage === 'transition') sfx('phase', 0.8)
   if (s.phase !== prev.phase) {
     if (s.phase === 'victory') {
-      sfx('victory', 0.8)
-      playStinger('score_victory')
+      victoryStep = 1
     } else if (s.phase === 'defeat') {
       sfx('defeat', 0.7)
       playStinger('score_defeat')

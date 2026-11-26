@@ -5,7 +5,7 @@ import { autoCull } from '../effects/visibility'
 import { Color3, Color4, Vector3 } from '@dcl/sdk/math'
 import { ARENA, BOSS, COLORS, PHASES, PLAYER, SESSION } from '../config'
 import { BossCtx, Convergence, DamageKind, DamageOutcome, resolveBossDamage } from './phaseRules'
-import { isActive, say, speak, state } from './state'
+import { isActive, say, speak, state, falseVictory } from './state'
 import { onReset } from './session'
 import { setVisage } from '../boss/watcher'
 import { finalSectors, gateSectors } from './assist'
@@ -64,6 +64,7 @@ function startTransition() {
   state.stage = 'transition'
   state.stageStartedAt = state.time
   burst({ x: ARENA.center.x, y: BOSS.hoverHeight, z: ARENA.center.z }, COLORS.syncGold, 2)
+  if (state.bossPhase === 2) say('THE WATCHER FALLS STILL...', 2.6)
 }
 
 function finishTransition() {
@@ -123,7 +124,9 @@ function phaseSystem(dt: number) {
     // Pause the formation's beat so echoes resume in step afterwards.
     for (const e of state.echoes) e.nextFire += Math.min(dt, SESSION.maxFrameDt)
     setBarrier('off', 0)
-    if (state.time - state.stageStartedAt >= SESSION.transitionSeconds) finishTransition()
+    const fv = falseVictory()
+    if (fv && fv.e >= 2.85) speak('firsttime', 'Did you really believe this was the first time?', 3.2)
+    if (state.time - state.stageStartedAt >= (state.bossPhase === 2 ? SESSION.finalTransitionSeconds : SESSION.transitionSeconds)) finishTransition()
     return
   }
   if (state.stage === 'gate') {

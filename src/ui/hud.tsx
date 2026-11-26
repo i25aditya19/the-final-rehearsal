@@ -67,7 +67,8 @@ function fmt(sec: number) {
 /** Title card in the first seconds: does not block play. */
 function Entrance() {
   const t = state.time
-  if (!isActive() || t > 5.5 || (state.runId > 1 && t > 3)) return null
+  // the full title card only on the first run; retries go straight back to the fight
+  if (!isActive() || t > 5.5 || state.runId > 1) return null
   const a = t < 0.8 ? t / 0.8 : t > 4.2 ? Math.max(0, 1 - (t - 4.2) / 1.3) : 1
   return (
     <UiEntity uiTransform={{ positionType: 'absolute', position: { top: '26%', left: '50%' }, margin: { left: -360 }, width: 720, height: 120, flexDirection: 'column', alignItems: 'center' }}>
@@ -160,6 +161,8 @@ function Subtitle() {
   )
 }
 
+const RANK_NAMES: Record<string, string> = { C: 'APPRENTICE', B: 'TIMEWEAVER', A: 'MASTER OF MOMENTS', S: 'THE UNFORESEEN' }
+
 /** Victory / defeat results with retry (E also retries); guided retry after two defeats. */
 function Results() {
   const won = state.phase === 'victory'
@@ -175,18 +178,18 @@ function Results() {
   const sc = state.score
   const offerGuided = !won && state.defeats >= 2 && !state.assist
   const lines = [
-    won ? `Time ${fmt(t)}   ·   Four-way Convergences ${state.fourWay}   ·   Redirects ${state.redirects}` : `${reason}  Reached phase ${['', 'I', 'II', 'III'][state.bossPhase]}.`,
+    won ? `Time ${fmt(t)}   ·   Four-way Convergences ${state.fourWay}   ·   Redirects ${state.redirects}` : `${reason}  Reached phase ${['', 'I', 'II', 'III'][state.bossPhase]}   ·   Survived ${fmt(t)}`,
     `Best Convergence: ${state.bestConvergence > 0 ? `${state.bestConvergence} echoes` : 'none'}   ·   Vitality lost: ${Math.round(state.damageTaken)}`,
     won ? '' : tip
   ].filter((l) => l)
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
       <UiEntity uiTransform={{ width: 620, height: won ? 400 : 330, flexDirection: 'column', alignItems: 'center', padding: 20, ...frame }} uiBackground={{ color: Color4.create(0.025, 0.025, 0.03, 0.9) }}>
-        <UiEntity uiTransform={{ width: '100%', height: 50 }} uiText={{ value: won ? 'TIME MOVES FORWARD AGAIN' : 'A MOMENT LOST', fontSize: 32, font: 'serif', color: c(won ? COLORS.syncGold : COLORS.dangerCrimson) }} />
+        <UiEntity uiTransform={{ width: '100%', height: 50 }} uiText={{ value: won ? 'THE FINAL REHEARSAL' : 'A MOMENT LOST', fontSize: 32, font: 'serif', color: c(won ? COLORS.syncGold : COLORS.dangerCrimson) }} />
         <UiEntity uiTransform={{ width: 300, height: 1, margin: { bottom: 8 } }} uiBackground={{ color: BORDER }} />
-        <UiEntity uiTransform={{ width: '100%', height: 22, margin: { bottom: 6 } }} uiText={{ value: won ? 'The Watcher is released from his archive.' : 'The Watcher keeps this moment.', fontSize: 15, font: 'serif', color: c(COLORS.silver) }} />
+        <UiEntity uiTransform={{ width: '100%', height: 22, margin: { bottom: 6 } }} uiText={{ value: won ? 'Time moves forward again.' : 'The past can always be rewritten.', fontSize: 15, font: 'serif', color: c(COLORS.silver) }} />
         {won && sc ? (
-          <UiEntity uiTransform={{ width: '100%', height: 40 }} uiText={{ value: `MASTERY ${sc.total}   ·   GRADE ${sc.grade}${state.newBest ? '   ·   NEW PERSONAL BEST' : `   ·   best ${state.personalBest}`}`, fontSize: 19, color: c(COLORS.ivory) }} />
+          <UiEntity uiTransform={{ width: '100%', height: 40 }} uiText={{ value: `MASTERY ${sc.total}   ·   GRADE ${sc.grade} · ${RANK_NAMES[sc.grade] ?? ''}${state.newBest ? '   ·   NEW PERSONAL BEST' : `   ·   best ${state.personalBest}`}`, fontSize: 19, color: c(COLORS.ivory) }} />
         ) : null}
         {lines.map((l, i) => (
           <UiEntity key={`line${i}`} uiTransform={{ width: '100%', height: 24 }} uiText={{ value: l, fontSize: 13, color: c(COLORS.ash) }} />
@@ -303,7 +306,7 @@ function GuidedConvergence() {
       return (
         <UiEntity
           uiTransform={{ positionType: 'absolute', position: { bottom: 200, left: '50%' }, margin: { left: -220 }, width: 440, height: 26, justifyContent: 'center' }}
-          uiText={{ value: 'Watch the runes beneath your echoes: when they glow gold...', fontSize: 14, color: c(COLORS.syncGold, 0.85) }}
+          uiText={{ value: 'E  ·  synchronize your echoes (instant when their runes glow gold)', fontSize: 14, color: c(COLORS.syncGold, 0.85) }}
         />
       )
     }

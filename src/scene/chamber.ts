@@ -7,7 +7,7 @@
 import { ColliderLayer, Entity, GltfContainer, GltfNodeModifiers, Material, MeshCollider, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA } from '../config'
-import { state } from '../game/state'
+import { falseVictory, state } from '../game/state'
 import { attackDebug } from '../boss/attacks'
 import { autoCull } from '../effects/visibility'
 
@@ -158,7 +158,9 @@ function chamberSystem(dt: number) {
   // takes a heavy blow, its rings align on a perfect four-echo Convergence, and at victory time
   // finally moves forward normally.
   const transition = state.stage === 'transition'
-  const targetRace = victory ? 1 : transition ? 7 : 1
+  const fvc = falseVictory()
+  // false victory: the mechanism stops dead, then runs backwards (the rewind)
+  const targetRace = victory ? 1 : fvc?.still ? 0 : fvc?.rewind ? -10 : transition ? 7 : 1
   race += (targetRace - race) * Math.min(1, step * 2)
   if (state.bossFlashUntil !== seenFlash) {
     seenFlash = state.bossFlashUntil
@@ -176,7 +178,7 @@ function chamberSystem(dt: number) {
   if (clock) Transform.getMutable(clock).rotation = Quaternion.fromEulerDegrees(shake * 0.3, clockAngle, shake * 0.3)
   // rewind loop: 9 s forward, 0.9 s eased back (never at victory)
   const LOOP = 9.9
-  loopT = victory ? 0 : (loopT + step * race) % LOOP
+  loopT = victory ? 0 : (((loopT + step * race) % LOOP) + LOOP) % LOOP
   const sweep = loopT < 9 ? loopT / 9 : 1 - smooth((loopT - 9) / 0.9)
   for (const h of hands) {
     if (victory) h.angle = (h.angle + h.speed * 0.5 * step) % 360

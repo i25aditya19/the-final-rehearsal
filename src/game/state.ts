@@ -60,6 +60,10 @@ export const state = {
   /** The Watcher's spoken line (non-blocking subtitle). */
   subtitle: '' as string,
   subtitleUntil: 0,
+  /** End of a running Convergence synchronization charge (0 = none). */
+  syncChargeUntil: 0,
+  /** Watcher staggered (after a perfect Convergence) until this time. */
+  staggerUntil: 0,
   saidLines: {} as Record<string, boolean>,
   /** Survive retries: defeats this session and the opt-in guided mode. */
   defeats: 0,
@@ -126,6 +130,8 @@ export function resetState() {
   state.convergenceReadyAt = 0
   state.lastShot = undefined
   state.lastConvergence = undefined
+  state.syncChargeUntil = 0
+  state.staggerUntil = 0
   state.bestConvergence = 0
   state.shots = 0
   state.hits = 0
@@ -143,4 +149,12 @@ export function resetState() {
   state.blindHits = 0
   state.achievements = []
   state.newBest = false
+}
+
+/** The false victory before phase III: undefined outside it. still = frozen and silent; rewind =
+ *  the temporal rewind just before the final transformation. */
+export function falseVictory(): { e: number; still: boolean; rewind: boolean } | undefined {
+  if (state.stage !== 'transition' || state.bossPhase !== 2) return undefined
+  const e = state.time - state.stageStartedAt
+  return { e, still: e < 2.8, rewind: e >= 3.3 && e < 5.0 }
 }
