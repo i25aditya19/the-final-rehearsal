@@ -4,6 +4,7 @@
 // primitive placeholder is shown instead (logged once).
 import {
   ColliderLayer,
+  LightSource,
   InputAction,
   PointerEventType,
   inputSystem,
@@ -18,7 +19,7 @@ import {
   engine
 } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
-import { ARENA, BOSS, COLORS, WATCHER_MODEL as M } from '../config'
+import { ARENA, BOSS, COLORS, UI, WATCHER_MODEL as M } from '../config'
 import { HitCylinder } from '../combat/aim'
 import { isActive, state } from '../game/state'
 import { onReset } from '../game/session'
@@ -42,12 +43,18 @@ const halos: { entity: Entity; speed: number; tilt: number }[] = []
 const hands: { entity: Entity; base: Vector3; side: number }[] = []
 /** Primitive stand-in shown until (or instead of) the GLB model. */
 let fallback: Entity
+let eyeOrb: Entity | undefined
+let eyeLight: Entity | undefined
+/** Eye position in body-model units for the current face (mask eye, or the helm's slit). */
+function eyeLocal(): Vector3 {
+  return visage === 'mask' ? Vector3.create(0, 1.757, 0.28) : Vector3.create(0, 1.624, 0.262)
+}
 let fallbackEye: Entity | undefined
 const fallbackRings: { entity: Entity; speed: number }[] = []
 
 type ModelStatus = 'loading' | 'ready' | 'fallback'
 let status: ModelStatus = M.enabled ? 'loading' : 'fallback'
-let visage: 'helm' | 'mask' = 'helm'
+let visage: 'helm' | 'mask' = M.startVisage
 const HIDDEN_SCALE = Vector3.create(0, 0, 0)
 
 /** Boss hit volume in scene coordinates (forgiving cylinder around the floating figure). */
@@ -86,7 +93,7 @@ export function createWatcher() {
   engine.addSystem(watcherSystem)
   onReset(() => {
     resetLiving()
-    setVisage('helm')
+    setVisage(M.startVisage)
   })
 }
 
@@ -100,6 +107,15 @@ function createModel() {
   helm = gltf(model, M.helm, Vector3.Zero(), Vector3.One())
   // The ivory mask replaces the helm for the final transformation; hidden until then.
   mask = gltf(model, M.mask, Vector3.create(M.maskOffset.x, M.maskOffset.y, M.maskOffset.z), HIDDEN_SCALE)
+
+  // The single crimson eye: a small intense emissive core plus a tight crimson light, so it reads
+  // from the far side of the arena (the eye texture alone is too small).
+  eyeOrb = engine.addEntity()
+  Transform.create(eyeOrb, { parent: model, position: eyeLocal(), scale: Vector3.create(0.05, 0.05, 0.05) })
+  GltfContainer.create(eyeOrb, { src: 'assets/fx/orb_crimson.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+  eyeLight = engine.addEntity()
+  Transform.create(eyeLight, { parent: model, position: Vector3.add(eyeLocal(), Vector3.create(0, 0, 0.25)) })
+  LightSource.create(eyeLight, { type: LightSource.Type.Point({}), color: Color3.create(0.9, 0.12, 0.25), intensity: 2200, range: 6 })
 
   // The Archive: one halo model, three instances at different sizes and speeds (world metres,
   // so they are parented to the root, not the scaled model).
@@ -150,14 +166,16 @@ function createFallback() {
 }
 
 function showFallback(show: boolean) {
-  Transform.getMutable(fallback).scale = show ? Vector3.One() : HIDDEN_SCALE
+  const t = Transform.getMutableOrNull(fallback)
+  if (t) t.scale = show ? Vector3.One() : HIDDEN_SCALE
 }
 
 /** World position of the Watcher's eye (helm slit / mask eye), for beams that leave from it. */
 export function watcherEyePosition(): V3 {
   const tr = Transform.get(root)
   const s = M.scale
-  const local = Vector3.create(0, 1.63 * s, 0.3 * s)
+  const e = eyeLocal()
+  const local = Vector3.create(e.x * s, e.y * s, e.z * s)
   const w = Vector3.rotate(local, tr.rotation)
   return { x: tr.position.x + w.x, y: tr.position.y + w.y, z: tr.position.z + w.z }
 }
@@ -190,7 +208,10 @@ function checkModelLoaded() {
   }
   if (finished === parts.length) {
     status = 'ready'
-    showFallback(false)
+    // The primitive stand-in is no longer needed: remove it entirely (it still cost draw calls).
+    engine.removeEntityWithChildren(fallback)
+    fallbackRings.length = 0
+    fallbackEye = undefined
     setVisage(visage)
     console.log('[FinalRehearsal] Watcher model loaded')
   } else if (state.time > LOAD_TIMEOUT) {
@@ -210,8 +231,8 @@ function useFallback() {
 function watcherSystem(dt: number) {
   const t = state.time
   if (status === 'loading') checkModelLoaded()
-  // Preview key: 1 swaps helm <-> ivory mask (final-transformation look). Remove before release.
-  if (inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) setVisage(visage === 'helm' ? 'mask' : 'helm')
+  // Debug only: 1 swaps the ivory mask and the dark helm.
+  if (UI.showDebug && inputSystem.isTriggered(InputAction.IA_ACTION_3, PointerEventType.PET_DOWN)) setVisage(visage === 'helm' ? 'mask' : 'helm')
 
   // Idle levitation and a slow, patient sway. On victory he sinks (full cinematic in M6).
   const tr = Transform.getMutable(root)
@@ -321,6 +342,26 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
     ht.scale = Vector3.create(h.side < 0 ? -hs : hs, hs, hs)
   })
 
+  // The ivory mask: in phase III it widens (the mask 'opens'); the eye burns brighter when he
+  // winds up an attack. Hidden once shattered.
+  if (status === 'ready' && !shattered) {
+    const kMask = M.maskScale * (phase === 3 ? 1.14 : 1) * (1 + 0.03 * a)
+    if (visage === 'mask') Transform.getMutable(mask).scale = Vector3.create(kMask, kMask, kMask)
+    if (eyeOrb) {
+      const et = Transform.getMutable(eyeOrb)
+      et.position = eyeLocal()
+      const ke = (phase === 3 ? 0.075 : 0.05) * (1 + 0.6 * a) * (flashing ? 1.5 : 1)
+      et.scale = Vector3.create(ke, ke, ke)
+    }
+    if (eyeLight) {
+      const l = LightSource.getMutable(eyeLight)
+      l.intensity = (phase === 3 ? 4200 : 2200) * (1 + 1.5 * a)
+    }
+  } else if (shattered && eyeOrb) {
+    Transform.getMutable(eyeOrb).scale = Vector3.Zero()
+    if (eyeLight) LightSource.getMutable(eyeLight).intensity = 0
+  }
+
   // Victory: the helm or mask shatters into fragments that fall away.
   if (frozen && te > 1.6 && !shattered) shatter()
   if (shards.length && shattered) {
@@ -330,7 +371,7 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
       st.position = Vector3.create(st.position.x + sh.vx * dt, Math.max(0.05, st.position.y + sh.vy * dt), st.position.z + sh.vz * dt)
       st.rotation = Quaternion.multiply(st.rotation, Quaternion.fromEulerDegrees(sh.spin * dt, sh.spin * 0.7 * dt, 0))
       const fadeK = Math.max(0, 1 - Math.max(0, te - 4.5) / 1.5)
-      st.scale = Vector3.create(0.32 * fadeK, 0.06 * fadeK, 0.5 * fadeK)
+      st.scale = Vector3.create(fadeK, fadeK, fadeK)
     }
   }
 }
@@ -344,13 +385,7 @@ function shatter() {
     for (let i = 0; i < 14; i++) {
       const e = engine.addEntity()
       Transform.create(e, { position: head })
-      MeshRenderer.setSphere(e)
-      Material.setPbrMaterial(e, {
-        albedoColor: Color4.fromHexString(visage === 'mask' || i % 3 ? COLORS.ivory : COLORS.charcoal),
-        emissiveColor: col3(COLORS.syncGold),
-        emissiveIntensity: 0.6,
-        roughness: 0.5
-      })
+      GltfContainer.create(e, { src: 'assets/fx/shard.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
       shards.push({ e, vx: 0, vy: 0, vz: 0, spin: 0 })
     }
   }
@@ -362,7 +397,7 @@ function shatter() {
     sh.spin = 200 + Math.random() * 300
     const st = Transform.getMutable(sh.e)
     st.position = head
-    st.scale = Vector3.create(0.32, 0.06, 0.5)
+    st.scale = Vector3.One()
   })
   burst({ x: head.x, y: head.y, z: head.z }, COLORS.finalWhite, 2.2)
 }

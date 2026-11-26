@@ -66,7 +66,8 @@ export const WATCHER_MODEL = {
   /** Halo model diameter is 0.30 m; three rings at these world diameters, behind the head. */
   haloDiameters: [1.9, 2.7, 3.5],
   haloSpeeds: [16, -10, 6],
-  haloOffsetZ: -0.75,
+  /** Behind the head, clear of the shoulders and robe (checked against the model's depth). */
+  haloOffsetZ: -1.05,
   /** Spectral hands floating beside the body (world metres relative to the boss root). */
   handScale: 2.0,
   handOffsets: [
@@ -74,8 +75,10 @@ export const WATCHER_MODEL = {
     { x: 2.6, y: 0.3, z: 0.9 }
   ],
   /** Mask placement when it replaces the helm (final transformation), body-model units. */
-  maskScale: 1.9,
-  maskOffset: { x: 0, y: 1.78, z: 0.15 }
+  maskScale: 2.15,
+  maskOffset: { x: 0, y: 1.8, z: 0.17 },
+  /** The ivory mask is his face from the first moment (the dark helm is kept only as a fallback). */
+  startVisage: 'mask' as 'mask' | 'helm'
 } as const
 
 export const IMPRINT = {

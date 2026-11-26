@@ -145,75 +145,17 @@ const disc = (name: string, radius: number, color: string, emissive?: number) =>
 make({ name: `${PREFIX}/Marble floor`, mesh: 'none', gltf: 'assets/environment/chamber_floor.glb', pos: [0, 0.003, 0], scale: [1, 1, 1], color: '', parent: root })
 void disc
 
-// Sector boundaries on the diagonals (sectors are centred on N/E/S/W).
-const lineLen = R - ARENA.daisRadius
-for (let i = 0; i < ARENA.sectorCount; i++) {
-  const deg = 45 + i * (360 / ARENA.sectorCount)
-  const mid = ARENA.daisRadius + lineLen / 2
-  const rad = (deg * Math.PI) / 180
-  make({
-    name: `${PREFIX}/Sector boundary ${i}`,
-    mesh: 'box',
-    pos: [Math.sin(rad) * mid, y + 0.002, Math.cos(rad) * mid],
-    scale: [0.12, 0.01, lineLen],
-    rotY: deg,
-    color: LINE,
-    emissive: 0.2,
-    parent: root
-  })
-}
-y += 0.004
+// Sector lines, N/E/S/W runes and the playable edge are engraved in the marble floor texture.
 
-// Sector rune plates: a diamond at each cardinal direction to help players read position.
-const sectorNames = ['North', 'East', 'South', 'West']
-for (let i = 0; i < ARENA.sectorCount; i++) {
-  const deg = i * (360 / ARENA.sectorCount)
+// Boundary: carved low parapet (1.6 m visual, procedural) plus an invisible 2.8 m collision ring
+// so the combat boundary is unchanged and cannot be jumped.
+make({ name: `${PREFIX}/Parapet`, mesh: 'none', gltf: 'assets/environment/chamber_parapet.glb', pos: [0, 0, 0], scale: [1, 1, 1], color: '', parent: root })
+const colSegs = 32
+const colLen = 2 * wallR * Math.tan(Math.PI / colSegs) + 0.2
+for (let i = 0; i < colSegs; i++) {
+  const deg = (i + 0.5) * (360 / colSegs)
   const rad = (deg * Math.PI) / 180
-  const r = R * 0.875
-  make({
-    name: `${PREFIX}/Rune ${sectorNames[i] ?? i}`,
-    mesh: 'box',
-    pos: [Math.sin(rad) * r, y + 0.002, Math.cos(rad) * r],
-    scale: [1.1, 0.01, 1.1],
-    rotY: deg + 45,
-    color: COLORS.ivory,
-    emissive: 0.35,
-    parent: root
-  })
-}
-
-// Boundary wall: polygon of solid segments just outside the playable floor.
-const segments = 48
-const segLen = 2 * wallR * Math.tan(Math.PI / segments) + 0.1
-for (let i = 0; i < segments; i++) {
-  const deg = (i + 0.5) * (360 / segments)
-  const rad = (deg * Math.PI) / 180
-  make({
-    name: `${PREFIX}/Wall ${i}`,
-    mesh: 'box',
-    pos: [Math.sin(rad) * wallR, 1.5, Math.cos(rad) * wallR],
-    scale: [segLen, 3, 0.7],
-    rotY: deg,
-    color: '#6A6A6A',
-    collider: 2,
-    parent: root
-  })
-}
-
-// Wall coping: a thin silver line along the top of the wall (reads the boundary at dusk).
-for (let i = 0; i < segments; i++) {
-  const deg = (i + 0.5) * (360 / segments)
-  const rad = (deg * Math.PI) / 180
-  make({
-    name: `${PREFIX}/Coping ${i}`,
-    mesh: 'box',
-    pos: [Math.sin(rad) * wallR, 3.05, Math.cos(rad) * wallR],
-    scale: [segLen, 0.12, 0.8],
-    rotY: deg,
-    color: COLORS.silver,
-    emissive: 0.25,
-    parent: root
-  })
+  make({ name: `${PREFIX}/Boundary collider ${i}`, mesh: 'box', pos: [Math.sin(rad) * wallR, 1.4, Math.cos(rad) * wallR], scale: [colLen, 2.8, 0.7], rotY: deg, color: '', collider: 2, parent: root })
 }
 
 // ---------------------------------------------------------------- Chamber of Unforgotten Moments
@@ -237,7 +179,7 @@ for (let i = 0; i < pillarCount; i++) {
 }
 // Delete the visual of the collider-only cylinders (keep their colliders).
 for (const [id, v] of Object.entries(NameC.data) as [string, Json][]) {
-  if (String(v.json.value).startsWith(`${PREFIX}/Pillar collider`)) {
+  if (String(v.json.value).startsWith(`${PREFIX}/Pillar collider`) || String(v.json.value).startsWith(`${PREFIX}/Boundary collider`)) {
     delete MeshC.data[id]
     delete MaterialC.data[id]
   }

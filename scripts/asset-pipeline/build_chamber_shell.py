@@ -8,7 +8,7 @@ Writes into assets/environment/:
 All dimensions come from the arena constants below (keep in sync with src/config.ts ARENA).
 usage: python build_chamber_shell.py <repoDir>
 """
-import sys, math
+import sys, math, io
 import numpy as np
 import trimesh
 from PIL import Image, ImageDraw, ImageFilter
@@ -29,6 +29,14 @@ PILLAR_DEG = [i * 30 + 15 for i in range(12)]
 rng = np.random.default_rng(7)
 
 
+def jpeg(img, q=88):
+    """Re-open as JPEG so trimesh embeds a compact JPEG instead of a PNG."""
+    b = io.BytesIO()
+    img.convert('RGB').save(b, 'JPEG', quality=q)
+    b.seek(0)
+    return Image.open(b)
+
+
 # ------------------------------------------------------------------ textures
 def fbm(n, octaves=6, seed=0):
     r = np.random.default_rng(seed)
@@ -44,59 +52,159 @@ def fbm(n, octaves=6, seed=0):
     return out / total
 
 
-def marble_floor(size=2048):
-    """Mid-grey marble with veins, dark inlaid rings, silver lines, zodiac ring and star."""
+R_FLOOR = R_WALL  # the floor now runs right up to the chamber wall (no outside ground visible)
+
+
+def marble_floor(size=4096):
+    """Dark polished charcoal marble with silver/white veins and astronomical engravings:
+    concentric celestial circles, crescent moons and stars, a central eye emblem, silver ritual
+    markings, and the gameplay guides (0.75 R / 0.5 R rings, playable edge, quadrant lines,
+    N/E/S/W runes) kept clearly readable."""
     n = fbm(size, 7, 1)
+    n2 = fbm(size, 5, 9)
     x = np.linspace(-1, 1, size)
     X, Y = np.meshgrid(x, x)
-    veins = np.abs(np.sin((X * 3.1 + Y * 1.7 + n * 5.5) * math.pi))
-    veins = 1 - np.clip(veins * 6, 0, 1)
-    base = 0.40 + 0.10 * n + 0.16 * veins          # ~0.40-0.66 mid marble
-    # Darker polished border band outside the playable edge.
-    rad = np.sqrt(X ** 2 + Y ** 2) * 23.4
-    base = np.where(rad > R_PLAY + 0.15, 0.17 + 0.05 * n + 0.06 * veins, base)
-    rgb = np.stack([base * 1.0, base * 0.99, base * 0.965], -1)
+    v1 = 1 - np.clip(np.abs(np.sin((X * 2.3 + Y * 1.1 + n * 6.0) * math.pi)) * 9, 0, 1)
+    v2 = 1 - np.clip(np.abs(np.sin((X * -1.4 + Y * 2.9 + n2 * 4.0) * math.pi)) * 14, 0, 1)
+    base = 0.115 + 0.05 * n + 0.20 * v1 + 0.12 * v2      # charcoal with silver-white veins
+    rad = np.sqrt(X ** 2 + Y ** 2) * R_FLOOR
+    base = np.where(rad > R_PLAY + 0.25, base * 0.72, base)  # darker border band to the wall
+    rgb = np.stack([base, base * 1.0, base * 1.025], -1)
     img = Image.fromarray((np.clip(rgb, 0, 1) * 255).astype(np.uint8))
     d = ImageDraw.Draw(img)
     c = size / 2
-    s = size / 2 / 23.4  # px per metre
+    s = size / 2 / R_FLOOR
+    W = lambda m: max(1, int(m * s))
+    silver = (190, 192, 198)
+    dim = (118, 120, 126)
+    ivory = (232, 228, 218)
+
     def circle(r, w, col):
-        d.ellipse([c - r * s, c - r * s, c + r * s, c + r * s], outline=col, width=max(1, int(w * s)))
-    dark = (44, 44, 46)
-    silver = (196, 197, 200)
-    ivory = (226, 222, 212)
-    circle(R_PLAY, 0.14, silver)
-    circle(R_PLAY - 0.35, 0.05, silver)
-    # Zodiac ring between 15.6 and 17.4 m with 12 houses and glyph circles.
-    circle(17.4, 0.08, silver)
-    circle(15.6, 0.08, silver)
-    for i in range(12):
-        a = math.radians(i * 30)
-        d.line([c + math.sin(a) * 15.6 * s, c - math.cos(a) * 15.6 * s, c + math.sin(a) * 17.4 * s, c - math.cos(a) * 17.4 * s], fill=silver, width=int(0.06 * s))
-        a2 = math.radians(i * 30 + 15)
-        gx, gy = c + math.sin(a2) * 16.5 * s, c - math.cos(a2) * 16.5 * s
-        rr = 0.45 * s
-        d.ellipse([gx - rr, gy - rr, gx + rr, gy + rr], outline=ivory, width=int(0.05 * s))
-        # a simple original glyph: a line + dot whose angle depends on the house
-        b = math.radians(i * 47)
-        d.line([gx - math.cos(b) * rr * 0.7, gy - math.sin(b) * rr * 0.7, gx + math.cos(b) * rr * 0.7, gy + math.sin(b) * rr * 0.7], fill=ivory, width=int(0.04 * s))
-        d.ellipse([gx - 3, gy - 3, gx + 3, gy + 3], fill=ivory)
-    # Gameplay rings (were stacked discs): 0.75 R and 0.5 R, dark inlay with silver edges.
-    for r in (R_PLAY * 0.75, R_PLAY * 0.5):
-        circle(r, 0.22, dark)
-        circle(r + 0.13, 0.04, silver)
-        circle(r - 0.13, 0.04, silver)
-    # Eight-pointed star around the dais and the dais itself.
-    pts = []
+        d.ellipse([c - r * s, c - r * s, c + r * s, c + r * s], outline=col, width=W(w))
+
+    def pt(r, deg):
+        a = math.radians(deg)
+        return c + math.sin(a) * r * s, c - math.cos(a) * r * s
+
+    def star(r, deg, size_m, col, points=4):
+        cx, cy = pt(r, deg)
+        poly = []
+        for k in range(points * 2):
+            rr = size_m * (1 if k % 2 == 0 else 0.32) * s
+            a = math.pi * k / points
+            poly.append((cx + math.sin(a) * rr, cy - math.cos(a) * rr))
+        d.polygon(poly, fill=col)
+
+    def crescent(r, deg, size_m, col, bg):
+        cx, cy = pt(r, deg)
+        rr = size_m * s
+        d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], fill=col)
+        a = math.radians(deg + 90)
+        ox, oy = math.sin(a) * rr * 0.42, -math.cos(a) * rr * 0.42
+        d.ellipse([cx - rr + ox, cy - rr + oy, cx + rr + ox, cy + rr + oy], fill=bg)
+
+    bg = (34, 34, 37)
+    # Playable edge: double silver line with a band of 96 ticks.
+    circle(R_PLAY, 0.12, silver)
+    circle(R_PLAY - 0.45, 0.04, dim)
+    for i in range(96):
+        a = i * 3.75
+        r0 = R_PLAY - (0.45 if i % 4 else 0.85)
+        d.line([pt(r0, a), pt(R_PLAY, a)], fill=dim, width=W(0.035))
+    # Outer celestial ring (moon phases) between the playable edge and the wall.
+    circle(R_PLAY + 2.6, 0.05, dim)
     for i in range(16):
-        r = 9.2 if i % 2 == 0 else 6.2
-        a = math.radians(i * 22.5)
-        pts.append((c + math.sin(a) * r * s, c - math.cos(a) * r * s))
-    d.polygon(pts, outline=silver, width=int(0.06 * s))
-    d.ellipse([c - (DAIS + 0.15) * s, c - (DAIS + 0.15) * s, c + (DAIS + 0.15) * s, c + (DAIS + 0.15) * s], fill=silver)
-    d.ellipse([c - DAIS * s, c - DAIS * s, c + DAIS * s, c + DAIS * s], fill=(36, 36, 38))
-    circle(DAIS - 0.6, 0.04, (120, 120, 124))
+        deg = i * 22.5 + 11.25
+        crescent(R_PLAY + 1.4, deg, 0.42, (200, 200, 205), bg)
+    # Zodiac ring with twelve houses, stars and original glyph marks.
+    circle(17.4, 0.06, silver)
+    circle(15.6, 0.06, silver)
+    for i in range(12):
+        d.line([pt(15.6, i * 30), pt(17.4, i * 30)], fill=silver, width=W(0.05))
+        star(16.5, i * 30 + 15, 0.38, ivory, 4 if i % 2 else 5)
+    # Gameplay rings: bright silver so positioning stays readable.
+    for r in (R_PLAY * 0.75, R_PLAY * 0.5):
+        circle(r, 0.10, silver)
+        circle(r + 0.22, 0.03, dim)
+    # Quadrant boundaries (diagonals) from the dais to the edge: thin, steady silver.
+    for k in range(4):
+        d.line([pt(DAIS + 0.4, 45 + k * 90), pt(R_PLAY - 0.5, 45 + k * 90)], fill=dim, width=W(0.07))
+    # N/E/S/W runes: ivory diamonds with a small star (sector identity).
+    for k in range(4):
+        cx, cy = pt(R_PLAY * 0.875, k * 90)
+        rr = 0.6 * s
+        d.polygon([(cx, cy - rr), (cx + rr, cy), (cx, cy + rr), (cx - rr, cy)], outline=ivory, width=W(0.06))
+        star(R_PLAY * 0.875, k * 90, 0.28, ivory, 4)
+    # Scattered small stars across the floor.
+    r2 = np.random.default_rng(3)
+    for _ in range(140):
+        rr = r2.uniform(DAIS + 1.5, R_PLAY - 1.2)
+        if abs(rr - 16.5) < 1.3 or abs(rr - R_PLAY * 0.75) < 0.5 or abs(rr - R_PLAY * 0.5) < 0.5:
+            continue
+        star(rr, r2.uniform(0, 360), r2.uniform(0.06, 0.16), (150, 152, 158), 4)
+    # Eight-pointed ritual star and the central eye emblem around the dais.
+    poly = [pt(8.6 if i % 2 == 0 else 6.0, i * 22.5) for i in range(16)]
+    d.polygon(poly, outline=silver, width=W(0.05))
+    circle(DAIS + 0.15, 0.12, silver)
+    d.ellipse([c - DAIS * s, c - DAIS * s, c + DAIS * s, c + DAIS * s], fill=(22, 22, 25))
+    # Eye: a vesica (almond) with iris and pupil, aligned north-south.
+    ew, eh = 3.6 * s, 1.75 * s
+    top = [(c + ew * math.cos(t), c - eh * math.sin(t)) for t in np.linspace(0, math.pi, 40)]
+    bot = [(c + ew * math.cos(t), c + eh * math.sin(t)) for t in np.linspace(math.pi, 0, 40)]
+    d.polygon(top + bot, outline=silver, width=W(0.07))
+    d.ellipse([c - 1.25 * s, c - 1.25 * s, c + 1.25 * s, c + 1.25 * s], outline=silver, width=W(0.06))
+    d.ellipse([c - 0.45 * s, c - 0.45 * s, c + 0.45 * s, c + 0.45 * s], fill=(150, 30, 52))
+    for k in range(12):  # eyelash rays
+        a = math.radians(-60 + k * 10.9)
+        d.line([(c + math.sin(a) * 2.2 * s, c - math.cos(a) * 2.2 * s * 0.9), (c + math.sin(a) * 2.9 * s, c - math.cos(a) * 2.9 * s * 0.9)], fill=dim, width=W(0.04))
+    img = img.filter(ImageFilter.SMOOTH)
     return img
+
+
+def parapet_texture(size=1024):
+    """One 3 m bay of the low boundary wall: recessed panel with a pointed arch relief, a carved
+    celestial symbol, silver border lines and stone mouldings (tiles horizontally)."""
+    n = fbm(size, 6, 21)
+    tone = 0.27 + 0.05 * (n - 0.5)
+    img = np.stack([tone, tone, tone * 1.02], -1)
+    im = Image.fromarray((np.clip(img, 0, 1) * 255).astype(np.uint8))
+    d = ImageDraw.Draw(im)
+    S = size
+    # mouldings: base plinth and top band (darker), silver fillets
+    d.rectangle([0, int(S * 0.86), S, S], fill=(46, 46, 49))
+    d.rectangle([0, 0, S, int(S * 0.1)], fill=(52, 52, 55))
+    d.line([(0, int(S * 0.1)), (S, int(S * 0.1))], fill=(178, 180, 186), width=6)
+    d.line([(0, int(S * 0.86)), (S, int(S * 0.86))], fill=(150, 152, 158), width=4)
+    # recessed pointed (equilateral) Gothic arch panel: each side is an arc centred on the
+    # opposite springing point, meeting in a point at the top.
+    l, r, b, spring = int(S * 0.16), int(S * 0.84), int(S * 0.8), int(S * 0.42)
+    w = r - l
+    cx = S / 2
+    rise = math.sqrt(w * w - (w / 2) ** 2)
+    k = (spring - S * 0.14) / rise
+    left = [(x, spring - k * math.sqrt(max(0, w * w - (x - r) ** 2))) for x in np.linspace(l, cx, 30)]
+    right = [(x, spring - k * math.sqrt(max(0, w * w - (x - l) ** 2))) for x in np.linspace(cx, r, 30)]
+    arch = [(l, b)] + left + right + [(r, b)]
+    d.polygon(arch, fill=(30, 30, 33), outline=(160, 162, 168))
+    # inner arch line
+    inset = 0.86
+    arch2 = [(cx + (x - cx) * inset, spring + (y - spring) * inset + S * 0.03) for (x, y) in left + right]
+    d.line(arch2, fill=(96, 98, 104), width=3)
+    # carved astrolabe: two rings, an eight-pointed star and four small dots
+    cy = S * 0.56
+    for rr in (S * 0.13, S * 0.095):
+        d.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], outline=(176, 178, 184), width=5)
+    pts = []
+    for q in range(16):
+        a = math.pi * q / 8
+        rr = S * (0.085 if q % 2 == 0 else 0.03)
+        pts.append((cx + math.sin(a) * rr, cy - math.cos(a) * rr))
+    d.polygon(pts, fill=(200, 200, 206))
+    for q in range(4):
+        a = math.pi / 4 + q * math.pi / 2
+        dx, dy = math.sin(a) * S * 0.16, -math.cos(a) * S * 0.16
+        d.ellipse([cx + dx - 6, cy + dy - 6, cx + dx + 6, cy + dy + 6], fill=(176, 178, 184))
+    return im.filter(ImageFilter.SMOOTH)
 
 
 def ashlar(size=1024, tone=0.34):
@@ -262,20 +370,21 @@ def export(name, parts):
 
 
 # floor
-v, f, uv = disc(23.4, 128, 0.0)
-export('chamber_floor', [('floor', textured(v, f, uv, mat(marble_floor(), rough=0.55)))])
+v, f, uv = disc(R_FLOOR, 160, 0.0)
+export('chamber_floor', [('floor', textured(v, f, uv, mat(jpeg(marble_floor(), 90), rough=0.6)))])
 
 # wall: lower and upper courses, ashlar texture (tiles every 4 m x 3 m)
-wall_img = ashlar(1024, 0.36)
+wall_img = jpeg(ashlar(1024, 0.27))
 v, f, uv = cylinder_inner(R_WALL, 0, H_SPRING + 0.2, 96, 4.0, 3.0, rows=2)
 wall = textured(v, f, uv, mat(wall_img, rough=0.9))
 export('chamber_wall', [('wall', wall)])
 
 # vault + ribs + springing ring + gallery + pilasters
 v, f, uv = vault()
-dome = textured(v, f, uv, mat(starmap(), rough=0.95))
-rib_mat = mat(solid((150, 150, 152)), rough=0.7)
-silver_mat = mat(solid((198, 199, 203)), rough=0.5, emissive=solid((70, 70, 72)), em_strength=1.0)
+dome = textured(v, f, uv, mat(jpeg(starmap(), 88), rough=0.95))
+rib_mat = mat(jpeg(ashlar(256, 0.42)), rough=0.85)
+silver_mat = mat(solid((176, 178, 184)), rough=0.6)
+cornice_mat = mat(jpeg(ashlar(256, 0.2)), rough=0.9)
 ribs = []
 for deg in PILLAR_DEG:
     a = math.radians(deg)
@@ -293,7 +402,15 @@ for deg in PILLAR_DEG:
                             [math.sin(a) * (R_WALL - 0.4), H_SPRING, math.cos(a) * (R_WALL - 0.4)], 1.4, 0.8))
 ribs_mesh = uv_box(ribs, rib_mat)
 trim = []
-for segs, r, y, w, hgt in [(72, R_WALL - 0.5, H_SPRING, 1.2, 0.5), (24, 2.6, H_APEX - 0.5, 0.5, 0.5)]:
+CORNICES = [(72, R_WALL - 0.55, H_SPRING, 1.3, 0.75), (24, 2.6, H_APEX - 0.5, 0.6, 0.6)]
+FILLETS = [(72, R_WALL - 1.22, H_SPRING - 0.2, 0.08, 0.08), (24, 2.0, H_APEX - 0.75, 0.06, 0.06)]
+corn = []
+for segs, r, y, w, hgt in CORNICES:
+    for i in range(segs):
+        a0, a1 = 2 * math.pi * i / segs, 2 * math.pi * (i + 1) / segs
+        corn.append(box_between([math.sin(a0) * r, y, math.cos(a0) * r], [math.sin(a1) * r, y, math.cos(a1) * r], w, hgt))
+cornice_mesh = uv_box(corn, cornice_mat)
+for segs, r, y, w, hgt in FILLETS:
     for i in range(segs):
         a0, a1 = 2 * math.pi * i / segs, 2 * math.pi * (i + 1) / segs
         trim.append(box_between([math.sin(a0) * r, y, math.cos(a0) * r], [math.sin(a1) * r, y, math.cos(a1) * r], w, hgt))
@@ -304,11 +421,45 @@ for i in range(72):
     a0, a1 = 2 * math.pi * i / 72, 2 * math.pi * (i + 1) / 72
     rm = (R_RING - 1.4 + R_WALL) / 2
     gal.append(box_between([math.sin(a0) * rm, H_GALLERY, math.cos(a0) * rm], [math.sin(a1) * rm, H_GALLERY, math.cos(a1) * rm], R_WALL - (R_RING - 1.4), 0.7))
-gal_mesh = uv_box(gal, mat(ashlar(512, 0.44), rough=0.85))
+gal_mesh = uv_box(gal, mat(jpeg(ashlar(512, 0.3)), rough=0.85))
 gal_edge = []
 for i in range(72):
     a0, a1 = 2 * math.pi * i / 72, 2 * math.pi * (i + 1) / 72
     r = R_RING - 1.45
-    gal_edge.append(box_between([math.sin(a0) * r, H_GALLERY + 0.1, math.cos(a0) * r], [math.sin(a1) * r, H_GALLERY + 0.1, math.cos(a1) * r], 0.3, 0.9))
-edge_mesh = uv_box(gal_edge, silver_mat)
-export('chamber_vault', [('vault', dome), ('ribs', ribs_mesh), ('trim', trim_mesh), ('gallery', gal_mesh), ('gallery_edge', edge_mesh)])
+    gal_edge.append(box_between([math.sin(a0) * r, H_GALLERY + 0.1, math.cos(a0) * r], [math.sin(a1) * r, H_GALLERY + 0.1, math.cos(a1) * r], 0.35, 0.9))
+edge_mesh = uv_box(gal_edge, cornice_mat)
+export('chamber_vault', [('vault', dome), ('ribs', ribs_mesh), ('cornice', cornice_mesh), ('trim', trim_mesh), ('gallery', gal_mesh), ('gallery_edge', edge_mesh)])
+
+# Low boundary parapet: reduced visual height (1.6 m), carved panels, silver mouldings.
+# Collision stays a separate invisible taller ring in the composite.
+R_PAR, H_PAR = R_WALLLOW, 1.6
+segs = 96
+bay = 3.0
+circ = 2 * math.pi * R_PAR
+verts, uvs, faces = [], [], []
+for side, r in (('in', R_PAR - 0.35), ('out', R_PAR + 0.35)):
+    base_i = len(verts)
+    for i in range(segs + 1):
+        a = 2 * math.pi * i / segs
+        for k, y in enumerate((0.0, H_PAR)):
+            verts.append([math.sin(a) * r, y, math.cos(a) * r])
+            uvs.append([circ * i / segs / bay, k * 1.0])
+    for i in range(segs):
+        p0 = base_i + i * 2
+        if side == 'in':
+            faces += [[p0, p0 + 1, p0 + 2], [p0 + 1, p0 + 3, p0 + 2]]
+        else:
+            faces += [[p0, p0 + 2, p0 + 1], [p0 + 1, p0 + 2, p0 + 3]]
+par = textured(np.array(verts), np.array(faces), np.array(uvs), mat(jpeg(parapet_texture()), rough=0.85))
+cap = []
+for i in range(segs):
+    a0, a1 = 2 * math.pi * i / segs, 2 * math.pi * (i + 1) / segs
+    cap.append(box_between([math.sin(a0) * R_PAR, H_PAR + 0.06, math.cos(a0) * R_PAR], [math.sin(a1) * R_PAR, H_PAR + 0.06, math.cos(a1) * R_PAR], 0.95, 0.14))
+cap_mesh = uv_box(cap, cornice_mat)
+fil = []
+for i in range(segs):
+    a0, a1 = 2 * math.pi * i / segs, 2 * math.pi * (i + 1) / segs
+    r = R_PAR - 0.5
+    fil.append(box_between([math.sin(a0) * r, H_PAR + 0.15, math.cos(a0) * r], [math.sin(a1) * r, H_PAR + 0.15, math.cos(a1) * r], 0.06, 0.05))
+fil_mesh = uv_box(fil, silver_mat)
+export('chamber_parapet', [('parapet', par), ('coping', cap_mesh), ('fillet', fil_mesh)])
