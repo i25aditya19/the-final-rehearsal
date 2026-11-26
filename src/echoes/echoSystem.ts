@@ -117,7 +117,7 @@ function tryConvergence() {
   state.convergences++
   state.lastConvergence = { count: group.length, hits, damage, sectors: hitSectors.size, at: state.time }
   state.bestConvergence = Math.max(state.bestConvergence, hits)
-  if (hits >= 2) speak('firstSync', 'You are learning things you were never meant to know.')
+  if (hits >= 2) speak('firstSync', 'You were never meant to learn that.')
   if (out.gateBroken) say(`${hits}-WAY CONVERGENCE  ·  THE BARRIER SHATTERS`, 3)
   else if (out.deflected && hits >= 2) say(convergenceAdvice(hits, hitSectors.size), 3)
   else if (hits >= 2) say(`${hits}-WAY CONVERGENCE  ·  ${damage} damage  ·  ${hitSectors.size} sector${hitSectors.size === 1 ? '' : 's'}`, 2.5)

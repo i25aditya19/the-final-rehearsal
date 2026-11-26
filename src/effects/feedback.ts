@@ -29,6 +29,8 @@ let prevConv = 0
 let prevCorr = 'idle'
 let corruptionsSeen = 0
 let lastTaunt = -100
+let deflectStreak = 0
+let lastDeflect = -10
 let lowHpSaid = false
 
 export function initFeedback() {
@@ -91,6 +93,8 @@ function feedbackSystem() {
     prevRedirects = 0
     prevConv = 0
     prevCorr = 'idle'
+    deflectStreak = 0
+    lastDeflect = -10
   }
   const player = Transform.getOrNull(engine.PlayerEntity)?.position
   // Cast flare at the caster's hand.
@@ -99,12 +103,27 @@ function feedbackSystem() {
   // Phase transitions: a golden flash around the Watcher.
   if (s.stage === 'transition' && prevStage !== 'transition') burst({ x: ARENA.center.x, y: BOSS.hoverHeight + 1.5, z: ARENA.center.z }, COLORS.syncGold, 2.6)
   // His voice reacts to what you do (subtitles; short and rare).
-  if (s.playerHitAt !== prevHit && s.playerHitAt > 0 && s.time - lastTaunt > 25) {
+  // Event-driven lines (each at most once per run unless noted; never over another line).
+  const free = s.time > s.subtitleUntil
+  if (s.deflectAt !== prevDeflect) {
+    deflectStreak = s.time - lastDeflect < 6 ? deflectStreak + 1 : 1
+    lastDeflect = s.time
+  }
+  if (deflectStreak >= 3 && free && s.time - lastTaunt > 20) {
+    // repeated ineffective attacks
     lastTaunt = s.time
-    speak(`taunt${Math.floor(s.time)}`, ['Predictable.', 'I have seen this moment before.', 'You repeat yourself.'][Math.floor(s.time) % 3], 2.5, false)
+    deflectStreak = 0
+    speak(`predictable${Math.floor(s.time)}`, 'Predictable.', 2.2, false)
+  }
+  const friendly = s.echoes.filter((e) => !e.corrupted).length
+  if (friendly >= 3 && free) speak('multiplying', 'You are multiplying moments.', 3)
+  if (s.playerHp > 0 && s.playerHp <= 30 && s.phase === 'active' && free) speak('collection', 'Another moment for my collection.', 3)
+  if (s.playerHitAt !== prevHit && s.playerHitAt > 0 && free && s.time - lastTaunt > 25) {
+    lastTaunt = s.time
+    speak(`taunt${Math.floor(s.time)}`, ['I have seen this moment before.', 'You repeat yourself.'][Math.floor(s.time) % 2], 2.5, false)
   }
   if (s.stage === 'transition' && prevStage === 'gate') speak(`gate${s.bossPhase}`, s.bossPhase === 1 ? 'Impossible... again?' : 'You are rewriting my archive...', 3, false)
-  if (s.redirects > prevRedirects) speak('redirected', 'My own moment... turned against me?', 3)
+  if (s.redirects > prevRedirects) speak('redirected', 'Impossible.', 3)
   if (s.convergences > prevConv && s.lastConvergence && s.lastConvergence.hits >= 4) speak('fourway', 'So many of you... all at once.', 3)
   if (!lowHpSaid && s.bossPhase === 3 && s.bossHp > 0 && s.bossHp <= 40) {
     lowHpSaid = true

@@ -102,6 +102,7 @@ export function strikeAnchor() {
   if (!e || mode === 'idle') return
   burst(v3(e.pos.x, CORRUPTION.anchorHeight, e.pos.z), COLORS.echoCyan, 1.4)
   say(mode === 'warning' ? 'Moment protected' : 'Moment reclaimed', 1.8)
+  if (mode !== 'warning') speak('reclaimed', 'How did you take it back?', 3)
   restore(e)
 }
 

@@ -6,7 +6,7 @@ import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA, ATTACKS, COLORS } from '../config'
 import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
 import { distXZ, headingDeg, sub, v3 } from '../math/vec'
-import { damagePlayer, isActive, say, state } from '../game/state'
+import { damagePlayer, isActive, say, speak, state } from '../game/state'
 import { corruptionReady, startCorruption, updateCorruption } from './corruption'
 import { withWarn } from '../game/assist'
 import { autoCull, setShown } from '../effects/visibility'
@@ -14,6 +14,7 @@ import { pointSegmentDistance, sectorOf } from '../combat/aim'
 import { watcherEyePosition } from './watcher'
 import { setSparks } from '../effects/vfx'
 import { onReset } from '../game/session'
+import { ADAPTIVE_LINES, AdaptiveKind, Signals, chooseAdaptive, extraRecovery } from './adaptive'
 
 type AttackKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation' | 'volley'
 /** Attack order per phase (GAME_DESIGN 7.4 / 8). Phase I introduces Gaze then Aftershock. */
@@ -121,6 +122,11 @@ export function initAttacks() {
 
 function resetAttacks() {
   cancelCurrent()
+  trail.length = 0
+  hitTimes.length = 0
+  history.length = 0
+  lastWasAdaptive = false
+  lastHitSeen = -10
   sequencePhase = 1
   current = undefined
   nextAttackAt = ATTACKS.firstAttackDelay
@@ -144,7 +150,46 @@ function cancelCurrent() {
   endObservation()
 }
 
+// ---- adaptive layer inputs (sampled, cheap) ----
+const trail: { t: number; x: number; z: number }[] = []
+const hitTimes: number[] = []
+let lastHitSeen = -10
+const history: AttackKind[] = []
+let lastWasAdaptive = false
+
+function sampleSignals(): Signals {
+  const now = state.time
+  const p = playerPos()
+  if (p && (trail.length === 0 || now - trail[trail.length - 1].t >= 0.5)) trail.push({ t: now, x: p.x, z: p.z })
+  while (trail.length && now - trail[0].t > 6) trail.shift()
+  let travel = 0
+  for (let i = 1; i < trail.length; i++) travel += Math.hypot(trail[i].x - trail[i - 1].x, trail[i].z - trail[i - 1].z)
+  if (trail.length < 6) travel = 99 // not enough history yet: do not call him still
+  if (state.playerHitAt !== lastHitSeen && state.playerHitAt > 0) {
+    lastHitSeen = state.playerHitAt
+    hitTimes.push(state.playerHitAt)
+  }
+  while (hitTimes.length && now - hitTimes[0] > 12) hitTimes.shift()
+  const friendly = state.echoes.filter((e) => !e.corrupted)
+  const sectors = new Set(friendly.map((e) => sectorOf(e.pos, ARENA.center, ARENA.sectorCount)))
+  return { recentTravel: travel, friendlyEchoes: friendly.length, echoSectors: sectors.size, recentHits: hitTimes.length, corruptionReady: corruptionReady() }
+}
+
 function nextKind(): AttackKind | undefined {
+  const sig = sampleSignals()
+  const allowed = SEQUENCES[state.bossPhase].filter((k) => state.stage !== 'gate' || GATE_ALLOWED.includes(k)) as AdaptiveKind[]
+  const pick = chooseAdaptive(sig, allowed, history as AdaptiveKind[], lastWasAdaptive)
+  lastWasAdaptive = !!pick
+  const kind = pick ? (pick.kind as AttackKind) : fixedKind()
+  if (pick) speak(`adapt_${pick.reason}`, ADAPTIVE_LINES[pick.reason], 3)
+  if (kind) {
+    history.push(kind)
+    if (history.length > 4) history.shift()
+  }
+  return kind
+}
+
+function fixedKind(): AttackKind | undefined {
   const phase = state.bossPhase
   if (sequencePhase !== phase) {
     sequencePhase = phase
@@ -193,7 +238,7 @@ function attackSystem() {
   if (finished) {
     current = undefined
     state.bossCasting = undefined
-    nextAttackAt = state.time + (state.stage === 'gate' ? ATTACKS.recovery * 1.6 : ATTACKS.recovery)
+    nextAttackAt = state.time + (state.stage === 'gate' ? ATTACKS.recovery * 1.6 : ATTACKS.recovery) + extraRecovery(sampleSignals())
   }
 }
 

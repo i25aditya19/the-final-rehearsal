@@ -76,7 +76,7 @@ function finishTransition() {
     say('PHASE II  ·  THE INTERFERENCE', 3)
   } else {
     setVisage('mask')
-    speak('final', 'I will not look away.', 4)
+    speak('final', 'I WILL NOT LOOK AWAY.', 4)
     say('PHASE III  ·  THE ALL-SEEING  ·  only a three-sided Convergence can pierce his sight', 4.5)
   }
 }

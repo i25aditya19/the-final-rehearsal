@@ -42,7 +42,7 @@ export function endRun(reason: EndReason) {
     state.personalBest = Math.max(state.personalBest, state.score.total)
   }
   else {
-    speak('defeat', 'Another moment for my collection.', 5, false)
+    speak('defeat', 'This moment is mine to keep.', 5, false)
     state.defeats++
   }
   // Free the cursor so the results button can be clicked.

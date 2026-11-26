@@ -54,6 +54,13 @@ let eyeGlow: Entity | undefined
 let ghost: Entity | undefined
 let ghostUntil = 0
 let ghostSide = 1
+// The Watcher's own temporal echo: a crimson afterimage that performs the repeated Aftershock
+// (he uses the same forbidden magic as the player) and flickers when he 'blinks' between phases.
+let crimsonGhost: Entity | undefined
+// He notices: a new echo draws his gaze for a moment before he returns to the player.
+let seenEchoIds: number[] = []
+let glanceUntil = -1
+let glanceAt: V3 | undefined
 /** Eye position in body-model units for the current face (mask eye, or the helm's slit). */
 function eyeLocal(): Vector3 {
   return visage === 'mask' ? Vector3.create(0, 1.757, 0.28) : Vector3.create(0, 1.624, 0.262)
@@ -134,6 +141,15 @@ function createModel() {
       transparencyMode: 2 /* MTM_ALPHA_BLEND */, metallic: 0, roughness: 1 } } } }]
   })
   setShown(ghost, false)
+  crimsonGhost = engine.addEntity()
+  Transform.create(crimsonGhost, { parent: root, scale: Vector3.create(M.scale, M.scale, M.scale) })
+  GltfContainer.create(crimsonGhost, { src: M.body, visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+  GltfNodeModifiers.create(crimsonGhost, {
+    modifiers: [{ path: '', castShadows: false, material: { material: { $case: 'pbr', pbr: {
+      albedoColor: Color4.create(0.85, 0.12, 0.22, 0.3), emissiveColor: Color3.create(0.9, 0.1, 0.25), emissiveIntensity: 2,
+      transparencyMode: 2, metallic: 0, roughness: 1 } } } }]
+  })
+  setShown(crimsonGhost, false)
   // Cool rim light behind the head: backlights the halos and shoulders so the black robes separate
   // from the dark chamber.
   eyeLight = engine.addEntity()
@@ -279,8 +295,15 @@ function watcherSystem(dt: number) {
   const frozen = victory
 
   // Glide-turn to face the player.
+  const ids = state.echoes.map((e) => e.id)
+  const fresh = state.echoes.find((e) => !seenEchoIds.includes(e.id) && !e.corrupted)
+  if (fresh && state.echoes.length > 0 && t > 1) {
+    glanceUntil = t + 1.1
+    glanceAt = fresh.pos
+  }
+  seenEchoIds = ids
   if (isActive() && Transform.has(engine.PlayerEntity)) {
-    const p = Transform.get(engine.PlayerEntity).position
+    const p = t < glanceUntil && glanceAt ? glanceAt : Transform.get(engine.PlayerEntity).position
     const dx = p.x - ARENA.center.x
     const dz = p.z - ARENA.center.z
     if (dx * dx + dz * dz > 0.01) {
@@ -337,6 +360,29 @@ function animateModel(t: number, dt: number, flashing: boolean, frozen: boolean)
   const aB = kind === 'blindspot' ? a : 0
   const aO = kind === 'observation' ? a : 0
   const aV = kind === 'volley' ? a : 0
+  if (crimsonGhost) {
+    const dbg = attackDebug()
+    const rep = dbg.kind === 'aftershock' && dbg.waves.length > 1 ? dbg.waves[1] : undefined
+    const repeating = rep && t >= rep.warnAt && t < rep.startAt + 0.9
+    const transStart = state.stage === 'transition' ? t - state.stageStartedAt : -1
+    const blinking = transStart >= 0 && transStart < 0.9
+    const on = !frozen && (!!repeating || blinking)
+    setShown(crimsonGhost, on)
+    if (on) {
+      const g = Transform.getMutable(crimsonGhost)
+      if (repeating && rep) {
+        // rises and spreads while the repeated wave is foreshadowed, then fades out as it fires
+        const p = Math.min(1, (t - rep.warnAt) / Math.max(0.1, rep.startAt - rep.warnAt))
+        const k = M.scale * (1.03 + 0.05 * p)
+        g.scale = Vector3.create(k, k, k)
+        g.position = Vector3.create(0, 0.25 + 0.5 * p, -0.6)
+      } else {
+        const k = M.scale * (1.1 + 0.3 * transStart)
+        g.scale = Vector3.create(k, k * 0.98, k)
+        g.position = Vector3.create(Math.sin(t * 40) * 0.4, 0.1, -0.4 - transStart)
+      }
+    }
+  }
   // Idle: an occasional slow pulse of the eye.
   const pulse = Math.max(0, Math.sin(t * 0.9)) ** 12
   if (ghost) {
