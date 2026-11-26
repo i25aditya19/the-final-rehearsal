@@ -156,6 +156,13 @@ Checkpoint before this pass: branch `checkpoint-before-polish` (cc0ab0a). Hitbox
 - **Controls**: HUD sound panel (bottom right): music and effects levels, mute. Not persisted between visits.
 - **Checks**: `npm run sim:audio` (forced defeat, wait, retry, mute, volume: loops and stingers correct, no duplicate sources); `AUDIO_LOG=1 npm run sim -- 1` logs every sound and the mix across a full fight. **Not yet heard by a human in the client.**
 
+## Second in-client correction (2026-11-26, creator screenshots)
+
+- **Red floor, root cause**: the marble floor sat at y = 0.003, level with the client's own default ground, which won the depth test (its reddish ground texture covered ours; the marble pattern never showed). Floor raised to y = 0.04 (echo runes and floor telegraphs lifted above it); floor texture 4096 -> 2048 (the only 4096 texture in the scene); smooth normals added to every procedural GLB.
+- **Too-dark walls**: ambient raised (sky colours 0.34/0.28/0.20), sun 0.7; arch and door textures' crushed blacks lifted to charcoal; window glow halved (it read as white foil).
+- **Ceiling blend** (creator liked the metallic original and the clean dial): the dial stays in front; the generated clock (metallic 0.55) and ring sit behind it as a large silver backplate, counter-turning; two clean armillary rings outside.
+- Creator: music is good.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.

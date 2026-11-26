@@ -55,7 +55,7 @@ def fbm(n, octaves=6, seed=0):
 R_FLOOR = R_WALL  # the floor now runs right up to the chamber wall (no outside ground visible)
 
 
-def marble_floor(size=4096):
+def marble_floor(size=2048):  # 4096 rendered red in the desktop client (2026-11-26)
     """Dark polished charcoal marble with silver/white veins and astronomical engravings:
     concentric celestial circles, crescent moons and stars, a central eye emblem, silver ritual
     markings, and the gameplay guides (0.75 R / 0.5 R rings, playable edge, quadrant lines,

@@ -367,7 +367,7 @@ function updateAftershock(): boolean {
   const r = active.radius
   const pulse = active.warning ? 0.6 + 0.4 * Math.abs(Math.sin((state.time - active.wave.warnAt) * 9)) : 1
   const band = Transform.getMutable(ringSegs[0])
-  band.position = Vector3.create(center.x, 0.02, center.z)
+  band.position = Vector3.create(center.x, 0.055, center.z)
   band.rotation = Quaternion.fromEulerDegrees(0, active.wave.gaps[0] ?? 0, 0)
   band.scale = Vector3.create(r, (active.warning ? 0.5 : 0.85) * pulse, r)
   // Safe lanes: ivory strips along each gap, from the dais to the wall.

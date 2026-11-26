@@ -46,15 +46,15 @@ export function createEchoViews() {
 
     // Rune: dark plate with an engraved silver edge; the fill disc grows inside it.
     const edge = engine.addEntity()
-    Transform.create(edge, { parent: root, position: Vector3.create(0, 0.035, 0), scale: Vector3.create(1.6, 0.01, 1.6) })
+    Transform.create(edge, { parent: root, position: Vector3.create(0, 0.065, 0), scale: Vector3.create(1.6, 0.01, 1.6) })
     MeshRenderer.setCylinder(edge)
     Material.setPbrMaterial(edge, { albedoColor: rgba(COLORS.silver, 1), emissiveColor: rgb(COLORS.silver), emissiveIntensity: 0.3 })
     const plate = engine.addEntity()
-    Transform.create(plate, { parent: root, position: Vector3.create(0, 0.04, 0), scale: Vector3.create(1.45, 0.01, 1.45) })
+    Transform.create(plate, { parent: root, position: Vector3.create(0, 0.07, 0), scale: Vector3.create(1.45, 0.01, 1.45) })
     MeshRenderer.setCylinder(plate)
     Material.setPbrMaterial(plate, { albedoColor: rgba(COLORS.obsidian, 1) })
     const fill = engine.addEntity()
-    Transform.create(fill, { parent: root, position: Vector3.create(0, 0.045, 0), scale: Vector3.create(0, 0.01, 0) })
+    Transform.create(fill, { parent: root, position: Vector3.create(0, 0.075, 0), scale: Vector3.create(0, 0.01, 0) })
     MeshRenderer.setCylinder(fill)
 
     // Spectral sorcerer: tapering robe + hood, translucent cyan.

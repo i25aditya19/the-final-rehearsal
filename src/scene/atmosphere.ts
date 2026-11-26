@@ -12,11 +12,11 @@ import { ARENA } from '../config'
 export const ATMOSPHERE = {
   /** Seconds since midnight. 48600 = 13:30: neutral light inside the enclosed chamber. */
   skyboxTime: 48600,
-  lightIntensity: 36000,
+  lightIntensity: 40000,
   lightRange: 30,
   /** Ambient grey (sky colours drive the ambient light): readable, never black. */
-  ambient: { zenith: 0.2, horizon: 0.16, nadir: 0.1 },
-  sunIntensity: 0.45
+  ambient: { zenith: 0.34, horizon: 0.28, nadir: 0.2 }, // raised: 0.2 left wall recesses pitch black in the client
+  sunIntensity: 0.7
 }
 
 const grey = (v: number, tint = 1.0): ColorGradient => ({ keys: [{ time: 0, color: Color4.create(v, v, v * tint, 1) }] })

@@ -142,7 +142,7 @@ const disc = (name: string, radius: number, color: string, emissive?: number) =>
 }
 // Astronomical marble floor (procedural, scripts/asset-pipeline/build_chamber_shell.py): the
 // gameplay rings (0.75 R, 0.5 R), the playable edge, zodiac ring and dais are baked into it.
-make({ name: `${PREFIX}/Marble floor`, mesh: 'none', gltf: 'assets/environment/chamber_floor.glb', pos: [0, 0.003, 0], scale: [1, 1, 1], color: '', parent: root })
+make({ name: `${PREFIX}/Marble floor`, mesh: 'none', gltf: 'assets/environment/chamber_floor.glb', pos: [0, 0.04, 0], scale: [1, 1, 1], color: '', parent: root })
 void disc
 
 // Sector lines, N/E/S/W runes and the playable edge are engraved in the marble floor texture.

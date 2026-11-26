@@ -14,6 +14,8 @@ const FX = 'assets/fx/'
 const CLOCK_Y = 24.5
 const DIAL_RADIUS = 6.2
 const NO_SHADOW = { modifiers: [{ path: '', castShadows: false }] }
+const FACE_DOWN = Quaternion.fromEulerDegrees(90, 0, 0) // generated models face +Z
+const ornate: { e: Entity; speed: number; angle: number }[] = []
 const CANDLE_COUNT = 24
 const CANDLE_SCALE = 2.2
 const BOOKS = 12
@@ -52,7 +54,14 @@ export function initChamber() {
     GltfNodeModifiers.create(e, NO_SHADOW)
     hands.push({ e, speed, angle })
   }
-  for (const [radius, speed, tiltX, tiltZ, angle] of [[8.2, 2.2, 16, 0, 0], [10.4, -1.4, 0, -11, 60]]) {
+  // Blend with the original ornate mechanism: the generated metallic clock and ring sit behind the
+  // dial as a large silver backplate (their busy centres hidden by the dial), slowly counter-turning.
+  for (const [src, scale, y, speed] of [['astro_clock.glb', 27, 1.45, -0.8], ['astro_rings.glb', 31, 2.6, 0.5]] as const) {
+    const e = model(ENV + src, Vector3.create(c.x, CLOCK_Y + y, c.z), scale, FACE_DOWN)
+    GltfNodeModifiers.create(e, NO_SHADOW)
+    ornate.push({ e, speed, angle: 0 })
+  }
+  for (const [radius, speed, tiltX, tiltZ, angle] of [[10.0, 2.2, 14, 0, 0], [12.4, -1.4, 0, -9, 60]]) {
     const e = model(ENV + 'armillary_ring.glb', Vector3.create(c.x, CLOCK_Y - 0.6, c.z), radius)
     GltfNodeModifiers.create(e, NO_SHADOW)
     rings.push({ e, speed, tiltX, tiltZ, angle })
@@ -118,6 +127,10 @@ function chamberSystem(dt: number) {
   for (const h of hands) {
     h.angle = (h.angle + h.speed * race * step) % 360
     Transform.getMutable(h.e).rotation = Quaternion.fromEulerDegrees(0, h.angle, 0)
+  }
+  for (const o of ornate) {
+    o.angle = (o.angle + o.speed * race * step) % 360
+    Transform.getMutable(o.e).rotation = Quaternion.multiply(Quaternion.fromEulerDegrees(0, o.angle, 0), FACE_DOWN)
   }
   for (const r of rings) {
     r.angle = (r.angle + r.speed * race * step) % 360
