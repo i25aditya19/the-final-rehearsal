@@ -204,6 +204,8 @@ function audioSystem(dt: number) {
     playStinger('score_victory')
   }
 
+  // Low vitality: a quiet heartbeat (paired with the pulsing crimson bar)
+  if (s.phase === 'active' && s.playerHp > 0 && s.playerHp <= 30) sfx('heartbeat', 0.3, 1.3)
   // Player magic
   if (s.shots > prev.shots) sfx('cast', 0.8)
   // Each echo slot sings its own note of a D-minor chord, so synchronized echoes form a harmony.

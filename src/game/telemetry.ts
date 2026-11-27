@@ -43,6 +43,7 @@ function telemetrySystem(dt: number) {
     echoSides.fill(0)
     seenIds = []
     lastHp = state.playerHp
+    lastHitAt = state.playerHitAt
     frames = 0
     frameTime = 0
     worstFps = 999
@@ -72,6 +73,8 @@ function telemetrySystem(dt: number) {
   }
   if (reported) return
   reported = true
+  // the killing blow lands on the frame the run ends
+  if (state.playerHitAt !== lastHitAt && state.lastHitBy) damage[state.lastHitBy] = (damage[state.lastHitBy] ?? 0) + Math.max(0, lastHp - state.playerHp)
   const r1 = (x: number) => (x < 0 ? null : Math.round(x * 10) / 10)
   console.log(
     '[FinalRehearsal telemetry] ' +

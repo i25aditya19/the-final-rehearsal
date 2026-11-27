@@ -36,6 +36,7 @@ function Hud() {
       <BossBar />
       <Subtitle />
       {isActive() ? <ActiveHud /> : <Results />}
+      <EndCinematic />
       <Entrance />
       <SoundPanel />
       <DamageDirection />
@@ -82,18 +83,63 @@ function Entrance() {
 }
 
 /** Vitality and remaining time, top-left. */
+// Player vitality: bottom centre, above the echo slots (the top-left corner is covered by the
+// Decentraland client's own location panel). A pale "chip" trails each loss so hits read clearly;
+// below 30 the bar pulses crimson (a quiet heartbeat plays, audio.ts).
+let chipHp = 100
+let chipAt = 0
 function PlayerPanel() {
   const hp = Math.max(0, state.playerHp)
-  const pct = Math.round((hp / PLAYER.maxVitality) * 100)
+  const max = PLAYER.maxVitality
+  if (hp > chipHp || state.time < chipAt) chipHp = hp
+  else chipHp = Math.max(hp, chipHp - 40 * Math.max(0, Math.min(0.05, state.time - chipAt)))
+  chipAt = state.time
+  const pct = (hp / max) * 100
+  const chipPct = (chipHp / max) * 100
   const low = hp <= 30
+  const pulse = low ? 0.55 + 0.45 * Math.abs(Math.sin(state.time * 4)) : 1
   const remaining = remainingSeconds()
+  const W = 470
   return (
-    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 18, left: 80 }, width: 236, height: 60, flexDirection: 'column', padding: { left: 10, right: 10, top: 6, bottom: 6 }, ...frame }} uiBackground={{ color: PANEL }}>
-      <UiEntity uiTransform={{ width: '100%', height: 18 }} uiText={{ value: `VITALITY   ${Math.ceil(hp)}${state.assist ? '   ·   GUIDED' : ''}`, fontSize: 13, color: c(low ? COLORS.dangerCrimson : COLORS.ivory), textAlign: 'middle-left' }} />
-      <UiEntity uiTransform={{ width: '100%', height: 6, margin: { top: 3, bottom: 4 } }} uiBackground={{ color: c(COLORS.charcoal) }}>
-        <UiEntity uiTransform={{ width: `${pct}%`, height: '100%' }} uiBackground={{ color: c(low ? COLORS.dangerCrimson : COLORS.ash) }} />
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: 108, left: '50%' }, margin: { left: -W / 2 }, width: W, height: 32, flexDirection: 'row', alignItems: 'center', padding: { left: 10, right: 10 }, ...frame }} uiBackground={{ color: PANEL }}>
+      <UiEntity uiTransform={{ width: 86, height: 20 }} uiText={{ value: state.assist ? 'VITALITY ·G' : 'VITALITY', fontSize: 12, font: 'serif', color: c(low ? COLORS.dangerCrimson : COLORS.silver, low ? pulse : 1), textAlign: 'middle-left' }} />
+      <UiEntity uiTransform={{ width: 250, height: 12, borderRadius: 2, borderColor: BORDER, borderWidth: 1 }} uiBackground={{ color: c(COLORS.obsidian) }}>
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: 0, top: 0 }, width: `${chipPct}%`, height: '100%' }} uiBackground={{ color: c(COLORS.ivory, 0.55) }} />
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: 0, top: 0 }, width: `${pct}%`, height: '100%' }} uiBackground={{ color: c(low ? COLORS.dangerCrimson : COLORS.echoCyan, low ? pulse : 0.9) }} />
       </UiEntity>
-      <UiEntity uiTransform={{ width: '100%', height: 16 }} uiText={{ value: `TIME   ${fmt(remaining)}`, fontSize: 12, color: c(remaining < 30 ? COLORS.dangerCrimson : COLORS.silver), textAlign: 'middle-left' }} />
+      <UiEntity uiTransform={{ width: 56, height: 20 }} uiText={{ value: `${Math.ceil(hp)}`, fontSize: 15, color: c(low ? COLORS.dangerCrimson : COLORS.ivory), textAlign: 'middle-right' }} />
+      <UiEntity uiTransform={{ width: 58, height: 20 }} uiText={{ value: fmt(remaining), fontSize: 12, color: c(remaining < 30 ? COLORS.dangerCrimson : COLORS.silver), textAlign: 'middle-right' }} />
+    </UiEntity>
+  )
+}
+
+// The end of the fight, before the results: defeat closes in crimson, victory floods with gold
+// and names the moment. (Results then fade in: defeat after 2.8 s, victory after 6.5 s.)
+function EndCinematic() {
+  if (isActive()) return null
+  const t = state.time - state.endedAt
+  if (state.phase === 'defeat') {
+    if (t > 3.2) return null
+    const k = Math.min(1, t / 1.6)
+    return (
+      <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}>
+        <EdgeGlow color={Color4.create(0.6, 0.05, 0.12, 0.25 + 0.4 * k)} />
+        <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }} uiBackground={{ color: Color4.create(0, 0, 0, 0.55 * Math.max(0, (t - 0.8) / 1.6)) }} />
+      </UiEntity>
+    )
+  }
+  if (t > 6.6) return null
+  const gold = t < 0.5 ? 0 : Math.max(0, 0.32 * (1 - Math.abs(t - 2.6) / 2.6))
+  const title = t < 2.4 ? 0 : t < 3.2 ? (t - 2.4) / 0.8 : t > 5.8 ? Math.max(0, (6.6 - t) / 0.8) : 1
+  return (
+    <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
+      <EdgeGlow color={Color4.create(0.85, 0.72, 0.42, gold)} />
+      {title > 0 ? (
+        <UiEntity uiTransform={{ width: 900, height: 120, flexDirection: 'column', alignItems: 'center', margin: { bottom: 160 } }}>
+          <UiEntity uiTransform={{ width: '100%', height: 64 }} uiText={{ value: 'TIME MOVES FORWARD AGAIN', fontSize: 30 + 10 * title, font: 'serif', color: c(COLORS.syncGold, title) }} />
+          <UiEntity uiTransform={{ width: '100%', height: 30 }} uiText={{ value: 'The Watcher could not foresee this moment.', fontSize: 16, font: 'serif', color: c(COLORS.ivory, title * 0.85) }} />
+        </UiEntity>
+      ) : null}
     </UiEntity>
   )
 }
@@ -169,7 +215,8 @@ const RANK_NAMES: Record<string, string> = { C: 'APPRENTICE', B: 'TIMEWEAVER', A
 function Results() {
   const won = state.phase === 'victory'
   const since = state.time - state.endedAt
-  if (since < (won ? 6.5 : 1.2)) return null
+  if (since < (won ? 6.5 : 2.8)) return null
+  const reveal = since - (won ? 6.5 : 2.8)
   const t = state.endedAt
   const reason = state.endReason === 'time' ? 'Time ran out.' : state.endReason === 'health' ? `Your vitality was exhausted${state.lastHitBy ? ` by ${state.lastHitBy}` : ''}.` : ''
   const tip = state.convergences === 0
@@ -192,14 +239,14 @@ function Results() {
         <UiEntity uiTransform={{ width: '100%', height: 22, margin: { bottom: 6 } }} uiText={{ value: won ? 'Time moves forward again.' : 'The past can always be rewritten.', fontSize: 15, font: 'serif', color: c(COLORS.silver) }} />
         {won && state.finalFormation.length ? <FormationMap /> : null}
         {won && sc ? (
-          <UiEntity uiTransform={{ width: '100%', height: 40 }} uiText={{ value: `MASTERY ${sc.total}   ·   ${state.assist ? 'GUIDED  ·  ' : ''}GRADE ${sc.grade} · ${RANK_NAMES[sc.grade] ?? ''}${state.newBest ? '   ·   NEW PERSONAL BEST' : `   ·   best ${state.assist ? state.personalBestGuided : state.personalBest}`}`, fontSize: 19, color: c(COLORS.ivory) }} />
+          <UiEntity uiTransform={{ width: '100%', height: 40 }} uiText={{ value: `MASTERY ${Math.round(sc.total * Math.min(1, reveal / 1.6))}   ·   ${state.assist ? 'GUIDED  ·  ' : ''}GRADE ${reveal < 1.7 ? '…' : `${sc.grade} · ${RANK_NAMES[sc.grade] ?? ''}`}${reveal < 1.7 ? '' : state.newBest ? '   ·   NEW PERSONAL BEST' : `   ·   best ${state.assist ? state.personalBestGuided : state.personalBest}`}`, fontSize: reveal >= 1.7 && reveal < 2.0 ? 23 : 19, color: c(reveal >= 1.7 && reveal < 2.0 ? COLORS.syncGold : COLORS.ivory) }} />
         ) : null}
         {lines.map((l, i) => (
           <UiEntity key={`line${i}`} uiTransform={{ width: '100%', height: 24 }} uiText={{ value: l, fontSize: 13, color: c(COLORS.ash) }} />
         ))}
         {won && state.achievements.length ? (
           <UiEntity uiTransform={{ width: '100%', height: 30, flexDirection: 'row', justifyContent: 'center', margin: { top: 6 } }}>
-            {state.achievements.map((a, i) => (
+            {state.achievements.filter((_, i) => reveal >= 2.0 + 0.4 * i).map((a, i) => (
               <UiEntity key={`ach${i}`} uiTransform={{ height: 24, width: 12 + a.length * 9, margin: { left: 4, right: 4 }, justifyContent: 'center', ...frame }} uiBackground={{ color: c(COLORS.syncGold, 0.18) }} uiText={{ value: a, fontSize: 11, color: c(COLORS.syncGold) }} />
             ))}
           </UiEntity>

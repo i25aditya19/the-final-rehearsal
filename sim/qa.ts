@@ -1,6 +1,6 @@
 // Functional QA in the real scene code (headless): restarts, post-victory safety, the Convergence
 // synchronization charge, the false victory, adaptive behaviour. run: npm run sim:qa
-import { InputAction, PointerEventType, PointerEventsResult, Transform, engine } from '@dcl/sdk/ecs'
+import { InputAction, InputModifier, PointerEventType, PointerEventsResult, Transform, engine } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { main } from '../src/index'
 import { state, damagePlayer } from '../src/game/state'
@@ -174,6 +174,33 @@ async function run() {
   const hpB = state.playerHp
   await step(7)
   check('pursuit: standing on the path is hit exactly once (8)', hpB - state.playerHp === 8, `hp ${hpB} -> ${state.playerHp}`)
+
+  // 9. Endings: defeat knocks the avatar out, holds movement, shatters echoes, then releases;
+  //    victory strikes the Victory pose and releases the echoes as light.
+  const RA = require('~system/RestrictedActions')
+  retry()
+  await step(0.5)
+  echoAt(0); echoAt(90)
+  RA.emotes.length = 0
+  state.playerImmuneUntil = 0
+  damagePlayer(999, 'qa')
+  await step(1)
+  const heldDuring = InputModifier.has(engine.PlayerEntity)
+  const shattered = state.echoes.length === 0
+  await step(2.2)
+  check('defeat: knockOut emote, movement held then released, echoes shatter', RA.emotes.includes('knockOut') && heldDuring && shattered && !InputModifier.has(engine.PlayerEntity), `emotes ${RA.emotes} held ${heldDuring} shattered ${shattered}`)
+  retry()
+  await step(0.5)
+  echoAt(0); echoAt(120); echoAt(240)
+  RA.emotes.length = 0
+  ;(await import('../src/game/session')).endRun('boss')
+  await step(3.2)
+  const released = state.echoes.length === 0
+  await step(2)
+  check('victory: Victory pose, echoes released, movement returned', RA.emotes.includes('Victory') && released && !InputModifier.has(engine.PlayerEntity), `emotes ${RA.emotes} released ${released}`)
+  retry()
+  await step(0.2)
+  check('retry after an ending leaves no movement hold', !InputModifier.has(engine.PlayerEntity))
 
   for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? `  [${r.detail}]` : ''}`)
   console.log(`QA ${results.filter((r) => r.ok).length}/${results.length} passed`)
