@@ -198,6 +198,23 @@ Balance finding and fix: adaptive Stolen Moment in phase III pushed the final ph
 Tests executed (headless, real scene code): unit 50/50; `npm run sim` all bot profiles 6/6 wins, 161-172 s; `npm run sim:qa` 7/7 (10 consecutive restarts clean; no timers survive a restart; charge fires; hit breaks charge without cooldown; false victory keeps formation and deals no damage; no damage after victory; still player draws the Gaze); `npm run sim:audio` (10 sources, no duplicates). No sync code in the scene (0 syncEntity/MessageBus): each visitor runs their own encounter; **not tested with two real visitors**.
 Not possible here: personal best across visits (no local storage API in scenes; it persists within a session), human playtest, in-client visuals and audio.
 
+## Final competitive optimization (2026-11-27, creator brief)
+
+Implemented (each verified by build + unit tests + sim + QA before the next):
+- **Phase III = three seals + finale** (`PHASES.phase3SealDamage` 34, `sealRecovery` 2.5, `desperateRecovery` 0.7, `desperateWindowBonus` 1, `finaleInterferenceWarning` 1.6, `finaleFinishAt` 3.9, `finaleDamage` 10). One seal per qualifying Convergence (3 or 4 echoes alike); Perfect reopens his sight at once; after seal B he is desperate; seal C starts the finale: one telegraphed ring, then the finishing attack from the captured formation. The finale cannot kill, cannot be stolen by the time cap, and nothing else can hit during it.
+- **Precise Convergence guidance** checked before firing (no wasted cooldown); compass pulses missing sides with SIDES n/m.
+- **Directional damage marker** (ring around the crosshair, attack name, BEHIND).
+- **Guided mode offered after the first defeat**; guided results labelled and kept apart.
+- **Blind Spot exposed-quadrant bonus** ×1.5 (`ATTACKS.blindSpot.exposedBonus`).
+- **Results formation miniature** from the actual finishing formation.
+- **Temporal Pursuit** (`ATTACKS.pursuit`), replaces the second Volley in phase II.
+- **Voice**: 12 lines (Piper + LibriTTS CC BY 4.0, processed), one source, music ducking.
+- **Local telemetry** (`UI.telemetry`), console summary per run.
+- Scoring audit: no stalling exploit (scored actions all advance the fight); heal cap and Untouchable verified in code.
+
+Measured (headless, real code): unit 51/51; sim all profiles 6/6 wins, ~93 s (phase III ~30 s + 6.5 s false victory; was ~100 s, which risked the 285 s cap for humans); QA 12/12; audio 11 sources, no duplicates; voice lines fire at the intended moments.
+Not possible from here: the jam page compliance check (fetch needs approval), any in-client verification, two visitors, human playtests.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
