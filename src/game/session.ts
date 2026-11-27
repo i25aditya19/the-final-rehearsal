@@ -22,7 +22,8 @@ function sessionSystem() {
     if (state.time > 1 && state.time < 2) speak('opening', 'Every moment leaves a trace.')
     if (state.bossHp <= 0) return endRun('boss')
     if (state.playerHp <= 0) return endRun('health')
-    if (state.time >= SESSION.hardCapSeconds) return endRun('time')
+    // A finale in progress is already won: the clock cannot take it away.
+    if (state.time >= SESSION.hardCapSeconds && state.stage !== 'finale') return endRun('time')
     return
   }
   // Results screen: E also retries (the button needs a free cursor).

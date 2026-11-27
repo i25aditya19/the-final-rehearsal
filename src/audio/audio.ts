@@ -85,7 +85,7 @@ function playStinger(name: keyof typeof STINGER_BASE) {
 const prev = {
   shots: 0, echoRepeats: 0, bossFlash: 0, deflect: -10, hit: -10, convergences: 0, redirects: 0,
   stage: 'fight' as string, phase: 'active' as string, bossPhase: 1, attack: undefined as string | undefined,
-  gazeStage: 'off', waveWarn: 0, corruption: 'idle', ready: 0, runId: -1, echoIds: [] as number[], introPlayed: false
+  gazeStage: 'off', waveWarn: 0, corruption: 'idle', ready: 0, runId: -1, echoIds: [] as number[], introPlayed: false, seals: 0
 }
 
 export function initAudio() {
@@ -162,7 +162,7 @@ function audioSystem(dt: number) {
     Object.assign(prev, {
       shots: 0, echoRepeats: 0, convergences: 0, redirects: 0, stage: 'fight', phase: 'active', bossPhase: 1, attack: undefined,
       gazeStage: 'off', waveWarn: 0, corruption: 'idle', ready: 0, runId: s.runId, bossFlash: 0, deflect: s.deflectAt, hit: s.playerHitAt,
-      echoIds: [], introPlayed: false
+      echoIds: [], introPlayed: false, seals: 0
     })
     victoryStep = 0
   }
@@ -225,6 +225,13 @@ function audioSystem(dt: number) {
   const cm = corruptionDebug().mode
   if (cm === 'warning' && prev.corruption !== 'warning') sfx('corruption', 0.85)
 
+  // Phase III seals and the finale
+  if (s.seals > prev.seals && s.seals < 3) sfx('gate_break', 1)
+  if (s.stage === 'finale' && prev.stage !== 'finale') {
+    sfx('gate_break', 1, 0.06, 0.8)
+    sfx('observation', 0.7)
+  }
+  prev.seals = s.seals
   // Structure
   if (s.stage === 'transition' && prev.stage !== 'transition') sfx(prev.stage === 'gate' ? 'gate_break' : 'phase', 1)
   if (s.stage === 'fight' && prev.stage === 'transition') sfx('phase', 0.8)

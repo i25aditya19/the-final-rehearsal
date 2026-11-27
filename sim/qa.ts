@@ -8,7 +8,8 @@ import { retry } from '../src/game/session'
 import { leaveEcho } from '../src/echoes/echoSystem'
 import { attackDebug } from '../src/boss/attacks'
 import { corruptionDebug } from '../src/boss/corruption'
-import { ARENA, BOSS, SESSION } from '../src/config'
+import { ARENA, BOSS, PHASES, SESSION } from '../src/config'
+import { hitBoss } from '../src/game/phases'
 
 const C = ARENA.center
 let ts = 1
@@ -128,6 +129,33 @@ async function run() {
     if (attackDebug().kind === 'gaze') gazeFirst = true
   })
   check('a still player draws the Gaze (adaptive)', gazeFirst)
+
+  // 7. Phase III seals and the finale: three qualifying Convergences; the third starts the finale;
+  //    his last resistance cannot kill; the finishing attack wins; the timer cannot steal it.
+  retry()
+  await step(0.3)
+  echoAt(0); echoAt(90); echoAt(180)
+  state.bossPhase = 3
+  state.bossHp = 100
+  state.stage = 'fight'
+  const seal = () => {
+    state.windowOpenUntil = state.time + 5
+    state.convergingIds = state.echoes.map((e) => e.id)
+    return hitBoss('convergence', 24, { hits: 3, sectors: 3 })
+  }
+  const s1 = seal()
+  await step(0.2)
+  const s2 = seal()
+  await step(0.2)
+  state.playerHp = 4
+  state.time = SESSION.hardCapSeconds - 1 // the clock is about to run out
+  const s3 = seal()
+  const inFinale = state.stage === 'finale' && state.bossHp === 1
+  let minHp = state.playerHp
+  await step(PHASES.finaleFinishAt + 1.5, () => { minHp = Math.min(minHp, state.playerHp) })
+  check('phase III: seal, seal, finale (3 qualifying Convergences, 3 echoes)', s1.seal === 1 && s2.seal === 2 && !!s3.finale && inFinale, `seals ${s1.seal},${s2.seal},${s3.finale} hp-after ${state.bossHp}`)
+  check('finale: his last resistance never kills; victory even as the time cap passes', state.phase === 'victory' && minHp >= 1, `phase ${state.phase} minHp ${minHp} formation ${state.finalFormation.length}`)
+  check('finale formation captured from the actual echoes', state.finalFormation.length === 3)
 
   for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? `  [${r.detail}]` : ''}`)
   console.log(`QA ${results.filter((r) => r.ok).length}/${results.length} passed`)

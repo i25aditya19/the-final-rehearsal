@@ -206,6 +206,17 @@ export const PHASES = {
   phase2GateSectors: 3,
   /** Distinct sectors required for a qualifying final Convergence. */
   phase3MinSectors: 3,
+  /** Phase III: damage per broken seal (3 seals: 100 -> 66 -> 32 -> finale at 1 HP). */
+  phase3SealDamage: 34,
+  /** After a seal breaks: breathing room before his next attack (s). */
+  sealRecovery: 2.5,
+  /** After the second seal (desperate): his recovery x this, his openings + this many s. */
+  desperateRecovery: 0.7,
+  desperateWindowBonus: 1,
+  /** Finale: his last resistance (one Aftershock ring), then the echoes' finishing attack. */
+  finaleInterferenceWarning: 1.6,
+  finaleFinishAt: 3.9,
+  finaleDamage: 10,
   /** Seconds without progress before a contextual hint appears. */
   stallHintSeconds: 8
 } as const

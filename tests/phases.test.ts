@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { BossCtx, masteryScore, phaseFloor, resolveBossDamage } from '../src/game/phaseRules'
 
-const rules = { phaseHealth: 100, phase2OrdinaryMultiplier: 0.25, phase2GateSectors: 3, phase3MinSectors: 3, phase3MinEchoes: 3 }
+const rules = { phaseHealth: 100, phase2OrdinaryMultiplier: 0.25, phase2GateSectors: 3, phase3MinSectors: 3, phase3MinEchoes: 3, phase3SealDamage: 34 }
 const ctx = (o: Partial<BossCtx>): BossCtx => ({ phase: 1, stage: 'fight', hp: 300, vulnerable: false, windowOpen: false, ...o })
 
 test('phase floors are 200 / 100 / 0', () => {
@@ -43,10 +43,19 @@ test('phase III barrier: only a qualifying Convergence during an opening, redire
   assert.equal(resolveBossDamage(open, 'redirect', 15, rules).deflected, true)
   assert.equal(resolveBossDamage(closed, 'convergence', 24, rules, { hits: 3, sectors: 3 }).deflected, true)
   assert.equal(resolveBossDamage(open, 'convergence', 24, rules, { hits: 3, sectors: 2 }).deflected, true)
-  assert.equal(resolveBossDamage(open, 'convergence', 24, rules, { hits: 3, sectors: 3 }).damage, 24)
-  const fin = resolveBossDamage(ctx({ phase: 3, hp: 20, windowOpen: true }), 'convergence', 40, rules, { hits: 4, sectors: 4 })
-  assert.equal(fin.damage, 20)
-  assert.equal(fin.reachedFloor, true)
+  const a = resolveBossDamage(open, 'convergence', 24, rules, { hits: 3, sectors: 3 })
+  assert.equal(a.damage, 34)
+  assert.equal(a.seal, 1)
+})
+
+test('phase III seals: three qualifying Convergences, same for 3 or 4 echoes; the third starts the finale', () => {
+  const b = resolveBossDamage(ctx({ phase: 3, hp: 66, windowOpen: true }), 'convergence', 40, rules, { hits: 4, sectors: 4 })
+  assert.equal(b.damage, 34)
+  assert.equal(b.seal, 2)
+  const c = resolveBossDamage(ctx({ phase: 3, hp: 32, windowOpen: true }), 'convergence', 24, rules, { hits: 3, sectors: 3 })
+  assert.equal(c.finale, true)
+  assert.equal(c.damage, 31) // holds at 1 HP: the finishing attack ends him
+  assert.equal(resolveBossDamage(ctx({ phase: 3, hp: 1, stage: 'finale', windowOpen: true }), 'convergence', 40, rules, { hits: 4, sectors: 4 }).damage, 0)
 })
 
 test('transition: no damage at all', () => {

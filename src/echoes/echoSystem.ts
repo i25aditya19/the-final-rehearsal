@@ -145,6 +145,7 @@ function fireConvergence(group: Echo[]) {
     burst(bossAt, COLORS.syncGold, 0.6 + 0.35 * group.length)
   }
 
+  state.convergingIds = group.map((e) => e.id)
   const out = hitBoss('convergence', convergenceDamage(hits, CONVERGENCE.damageByCount, IMPRINT.echoDamage), { hits, sectors: hitSectors.size }, { x: ARENA.center.x, y: 4, z: ARENA.center.z })
   const damage = Math.round(out.damage)
   if (hits >= 4 && hitSectors.size >= 4 && (out.damage > 0 || out.gateBroken)) state.fourWay++

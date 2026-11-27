@@ -1,7 +1,7 @@
 // Pure phase/damage rules (GAME_DESIGN 7-8). No SDK imports; tested in tests/phases.test.ts.
 
 export type BossPhase = 1 | 2 | 3
-export type Stage = 'fight' | 'gate' | 'transition'
+export type Stage = 'fight' | 'gate' | 'transition' | 'finale'
 export type DamageKind = 'direct' | 'echo' | 'convergence' | 'redirect'
 
 export type PhaseRules = {
@@ -10,6 +10,8 @@ export type PhaseRules = {
   phase2GateSectors: number
   phase3MinSectors: number
   phase3MinEchoes: number
+  /** Phase III is three seals: each qualifying Convergence breaks one, whatever its size. */
+  phase3SealDamage: number
 }
 
 export type BossCtx = {
@@ -32,6 +34,10 @@ export type DamageOutcome = {
   gateBroken: boolean
   /** HP reached this phase's floor: raise the gate. */
   reachedFloor: boolean
+  /** Phase III: a seal broke (1, 2) or the last seal broke and the finale begins (3). */
+  seal?: number
+  /** The last seal broke: hold at 1 HP for the finale (the finishing attack kills). */
+  finale?: boolean
 }
 
 /** HP floor of a phase: phase I ends at 200, phase II at 100, phase III at 0. */
@@ -48,7 +54,7 @@ export function convergenceQualifies(ctx: BossCtx, conv: Convergence, rules: Pha
 
 export function resolveBossDamage(ctx: BossCtx, kind: DamageKind, amount: number, rules: PhaseRules, conv?: Convergence): DamageOutcome {
   const none = (deflected: boolean): DamageOutcome => ({ damage: 0, deflected, gateBroken: false, reachedFloor: false })
-  if (ctx.stage === 'transition' || amount <= 0 || ctx.hp <= 0) return none(false)
+  if (ctx.stage === 'transition' || ctx.stage === 'finale' || amount <= 0 || ctx.hp <= 0) return none(false)
 
   // Gates: only the teaching Convergence breaks them; gate-opening damage never carries over.
   if (ctx.stage === 'gate') {
@@ -65,6 +71,12 @@ export function resolveBossDamage(ctx: BossCtx, kind: DamageKind, amount: number
     // opening gets through. Redirected corruption can never bypass it.
     const ok = kind === 'convergence' && conv && ctx.windowOpen && convergenceQualifies(ctx, conv, rules)
     if (!ok) return none(true)
+    // One seal per qualifying Convergence (3 echoes or 4: same progress, so a three-echo strategy
+    // needs exactly three openings). The last seal does not kill: it starts the finale.
+    const remaining = ctx.hp - rules.phase3SealDamage
+    if (remaining <= 0.5) return { damage: ctx.hp - 1, deflected: false, gateBroken: false, reachedFloor: false, seal: 3, finale: true }
+    const seal = Math.round((rules.phaseHealth - remaining) / rules.phase3SealDamage)
+    return { damage: rules.phase3SealDamage, deflected: false, gateBroken: false, reachedFloor: false, seal }
   }
 
   const floor = phaseFloor(ctx.phase, rules)

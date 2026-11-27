@@ -64,6 +64,15 @@ export const state = {
   syncChargeUntil: 0,
   /** Watcher staggered (after a perfect Convergence) until this time. */
   staggerUntil: 0,
+  /** Phase III seals broken (0-3). */
+  seals: 0,
+  /** Finale start time (0 = not in the finale) and whether his last resistance hit the player. */
+  finaleAt: 0,
+  finaleHit: false,
+  /** Echo positions of the finishing Convergence, captured for the results screen. */
+  finalFormation: [] as { x: number; z: number }[],
+  /** Echo ids of the Convergence being resolved right now. */
+  convergingIds: [] as number[],
   saidLines: {} as Record<string, boolean>,
   /** Survive retries: defeats this session and the opt-in guided mode. */
   defeats: 0,
@@ -93,6 +102,9 @@ export function speak(key: string, text: string, seconds = 3.5, once = true) {
 
 /** Damage the player once per attack event, honouring post-hit immunity. Returns damage dealt. */
 export function damagePlayer(amount: number, source: string): number {
+  // During the finale only his last resistance can touch the player (stray bolts or a hostile
+  // echo shot already in flight cannot), and it never ends the run.
+  if (state.stage === 'finale' && source !== 'his last resistance') return 0
   if (!isActive() || state.time < state.playerImmuneUntil) return 0
   const dmg = Math.max(0, Math.min(amount * (state.assist ? 0.7 : 1), state.playerHp))
   state.playerHp -= dmg
@@ -132,6 +144,11 @@ export function resetState() {
   state.lastConvergence = undefined
   state.syncChargeUntil = 0
   state.staggerUntil = 0
+  state.seals = 0
+  state.finaleAt = 0
+  state.finaleHit = false
+  state.finalFormation = []
+  state.convergingIds = []
   state.bestConvergence = 0
   state.shots = 0
   state.hits = 0

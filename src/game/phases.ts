@@ -10,13 +10,16 @@ import { onReset } from './session'
 import { setVisage } from '../boss/watcher'
 import { finalSectors, gateSectors } from './assist'
 import { burst } from '../effects/vfx'
+import { onSealBroken, startFinaleInterference } from '../boss/attacks'
+import { spawnTracer } from '../effects/tracers'
 
 const rules = () => ({
   phaseHealth: BOSS.phaseHealth,
   phase2OrdinaryMultiplier: PHASES.phase2OrdinaryMultiplier,
   phase2GateSectors: gateSectors(),
   phase3MinSectors: finalSectors(),
-  phase3MinEchoes: state.assist ? 2 : 3
+  phase3MinEchoes: state.assist ? 2 : 3,
+  phase3SealDamage: PHASES.phase3SealDamage
 })
 
 let barrier: Entity
@@ -49,6 +52,8 @@ export function hitBoss(kind: DamageKind, amount: number, conv?: Convergence, at
   }
   if (out.reachedFloor && state.bossPhase < 3) enterGate()
   if (out.gateBroken) startTransition()
+  if (out.seal && !out.finale) breakSeal(!!conv && conv.hits >= 4 && conv.sectors >= 4)
+  if (out.finale) startFinale()
   return out
 }
 
@@ -117,9 +122,56 @@ function setBarrier(look: 'off' | 'gate' | 'shield' | 'open', pulse: number) {
   })
 }
 
+// Phase III seals. A: his observation breaks. B: his control breaks (desperate). C: the finale.
+function breakSeal(perfect: boolean) {
+  state.seals++
+  burst({ x: ARENA.center.x, y: BOSS.hoverHeight + 1.5, z: ARENA.center.z }, COLORS.syncGold, 2.2)
+  if (state.seals === 1) {
+    say(perfect ? 'HIS OBSERVATION SHATTERS  ·  two seals remain  ·  his sight reopens at once' : 'HIS OBSERVATION BREAKS  ·  two seals remain', 3.5)
+    speak('seal1', 'You... see me?', 2.5)
+  } else {
+    say(perfect ? 'HIS CONTROL SHATTERS  ·  one seal remains' : 'HIS CONTROL BREAKS  ·  one seal remains  ·  he grows desperate', 3.5)
+    speak('seal2', 'Stop... rewriting... me...', 3)
+  }
+  onSealBroken(perfect)
+}
+
+function startFinale() {
+  state.seals = 3
+  state.stage = 'finale'
+  state.finaleAt = state.time
+  state.finaleHit = false
+  // Capture the formation that earned the finale (it fires the finishing attack).
+  const ids = state.convergingIds
+  const formation = state.echoes.filter((e) => ids.includes(e.id) && !e.corrupted)
+  state.finalFormation = formation.map((e) => ({ x: e.pos.x, z: e.pos.z }))
+  // The echoes hold their charge until the finishing attack.
+  for (const e of state.echoes) e.nextFire = state.time + PHASES.finaleFinishAt + 1
+  say('THE FINAL REHEARSAL  ·  survive his last resistance  ·  your echoes are charging', 3.5)
+  speak('resist', 'No... not this moment...', 2.5)
+  startFinaleInterference()
+}
+
+function updateFinale() {
+  const t = state.time - state.finaleAt
+  if (t >= PHASES.finaleFinishAt) {
+    // The finishing attack: every echo of the formation fires into him from where it stands.
+    const boss = { x: ARENA.center.x, y: BOSS.hoverHeight + 0.6, z: ARENA.center.z }
+    for (const p of state.finalFormation) spawnTracer({ x: p.x, y: 1.4, z: p.z }, boss, COLORS.syncGold, false, { width: 0.35, seconds: 1.4, intensity: 9 })
+    burst(boss, COLORS.syncGold, 3)
+    if (!state.finaleHit) say('MOMENT EVADED  ·  FLAWLESS FINALE', 2.5)
+    state.bossFlashUntil = state.time + 0.3
+    state.bossHp = 0 // the session ends the run as a victory on its next tick
+  }
+}
+
 function phaseSystem(dt: number) {
   if (!isActive()) return setBarrier('off', 0)
   const pulse = Math.sin(state.time * 3)
+  if (state.stage === 'finale') {
+    setBarrier('off', 0)
+    return updateFinale()
+  }
   if (state.stage === 'transition') {
     // Pause the formation's beat so echoes resume in step afterwards.
     for (const e of state.echoes) e.nextFire += Math.min(dt, SESSION.maxFrameDt)

@@ -3,7 +3,7 @@
 // recovery between them. Visuals are pooled primitives; hit tests are pure (attackMath.ts).
 import { Entity, GltfContainer, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
-import { ARENA, ATTACKS, COLORS, SESSION } from '../config'
+import { ARENA, ATTACKS, COLORS, PHASES, SESSION } from '../config'
 import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
 import { distXZ, headingDeg, sub, v3 } from '../math/vec'
 import { damagePlayer, isActive, say, speak, state } from '../game/state'
@@ -122,6 +122,8 @@ export function initAttacks() {
 
 function resetAttacks() {
   cancelCurrent()
+  forcedNext = undefined
+  finaleRing = false
   trail.length = 0
   hitTimes.length = 0
   history.length = 0
@@ -194,6 +196,11 @@ function nextKind(): AttackKind | undefined {
 }
 
 function fixedKind(): AttackKind | undefined {
+  if (forcedNext) {
+    const k = forcedNext
+    forcedNext = undefined
+    return k
+  }
   const phase = state.bossPhase
   if (sequencePhase !== phase) {
     sequencePhase = phase
@@ -220,7 +227,41 @@ function fixedKind(): AttackKind | undefined {
 }
 
 let seenFourWay = 0
+let forcedNext: AttackKind | undefined
+let finaleRing = false
+
+/** Phase III: a seal broke. He stops what he was doing and reels; a perfect Convergence makes
+ *  his sight reopen at once (the next attack is the Final Observation again). */
+export function onSealBroken(perfect: boolean) {
+  cancelCurrent()
+  state.windowOpenUntil = 0
+  state.bossCasting = undefined
+  state.staggerUntil = state.time + PHASES.sealRecovery
+  nextAttackAt = state.time + PHASES.sealRecovery
+  forcedNext = perfect ? 'observation' : undefined
+}
+
+/** Finale: his last resistance, one telegraphed Aftershock ring (jump it or use a gap). */
+export function startFinaleInterference() {
+  cancelCurrent()
+  current = 'aftershock'
+  startedAt = state.time
+  state.bossCasting = 'aftershock'
+  state.bossCastAt = state.time
+  finaleRing = true
+  const w = state.time + PHASES.finaleInterferenceWarning
+  waves = [{ warnAt: state.time, startAt: w, gaps: [], done: false, hit: false, prevRadius: ATTACKS.aftershock.startRadius }]
+}
+
 function attackSystem() {
+  if (state.stage === 'finale') {
+    // Only his last resistance runs; nothing new starts.
+    if (current === 'aftershock' && updateAftershock()) {
+      current = undefined
+      state.bossCasting = undefined
+    }
+    return
+  }
   // A perfect four-sided Convergence staggers him: no new attack for a few seconds.
   if (state.fourWay !== seenFourWay) {
     if (state.fourWay > seenFourWay) {
@@ -252,7 +293,8 @@ function attackSystem() {
   if (finished) {
     current = undefined
     state.bossCasting = undefined
-    nextAttackAt = state.time + (state.stage === 'gate' ? ATTACKS.recovery * 1.6 : ATTACKS.recovery) + extraRecovery(sampleSignals())
+    const desperate = state.bossPhase === 3 && state.seals >= 2 ? PHASES.desperateRecovery : 1
+    nextAttackAt = state.time + (state.stage === 'gate' ? ATTACKS.recovery * 1.6 : ATTACKS.recovery * desperate) + extraRecovery(sampleSignals())
   }
 }
 
@@ -403,7 +445,11 @@ function updateAftershock(): boolean {
         const hit = ringSweptHits(p, { center, radius, bandWidth: a.bandWidth, gapCenters: w.gaps, gapDeg: a.gapDeg, jumpClear: a.jumpClear }, w.prevRadius, ARENA.floorY)
         if (hit) {
           w.hit = true // one hit per wave
-          damagePlayer(a.damage, 'Aftershock')
+          if (finaleRing) {
+            // the finale can hurt but never end the run: victory stays reachable
+            state.finaleHit = true
+            damagePlayer(Math.min(PHASES.finaleDamage, Math.max(0, state.playerHp - 1)), 'his last resistance')
+          } else damagePlayer(a.damage, 'Aftershock')
         }
       }
       w.prevRadius = radius
@@ -451,6 +497,7 @@ function hideRing() {
 
 function endAftershock() {
   waves = []
+  finaleRing = false
   if (ringSegs.length) hideRing()
 }
 
@@ -580,7 +627,7 @@ function updateObservation(): boolean {
     const p = playerPos()
     const safe = p ? safeCenters().some((c) => Math.hypot(p.x - c.x, p.z - c.z) <= f.safeRadius + 0.3) : true
     if (!safe) damagePlayer(f.pulseDamage, 'the Final Observation')
-    state.windowOpenUntil = state.time + f.openWindow
+    state.windowOpenUntil = state.time + f.openWindow + (state.seals >= 2 ? PHASES.desperateWindowBonus : 0)
     say('HIS SIGHT IS OPEN  ·  Convergence from three sides, now!', 3)
   }
   if (t >= f.warning + 0.4) {
