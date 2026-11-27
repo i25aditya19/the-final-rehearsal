@@ -19,7 +19,7 @@ export function initSession() {
 
 function sessionSystem() {
   if (isActive()) {
-    if (state.time > 1 && state.time < 2) speak('opening', 'Every moment leaves a trace.')
+    if (state.time > 1 && state.time < 2) speak('opening', 'How many times have we rehearsed this?', 4)
     if (state.bossHp <= 0) return endRun('boss')
     if (state.playerHp <= 0) return endRun('health')
     // A finale in progress is already won: the clock cannot take it away.

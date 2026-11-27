@@ -73,6 +73,9 @@ export const state = {
   finalFormation: [] as { x: number; z: number }[],
   /** Echo ids of the Convergence being resolved right now. */
   convergingIds: [] as number[],
+  /** Last spoken line (the audio system voices it if a recording exists). */
+  voiceKey: '',
+  voiceSeq: 0,
   /** The Blind Spot's exposed quadrant (0 N, 1 E, 2 S, 3 W) while he is vulnerable. */
   blindSector: -1,
   /** Origin of the last hit taken (directional damage marker). */
@@ -104,6 +107,8 @@ export function speak(key: string, text: string, seconds = 3.5, once = true) {
   state.saidLines[key] = true
   state.subtitle = text
   state.subtitleUntil = state.time + seconds
+  state.voiceKey = key
+  state.voiceSeq++
 }
 
 /** Damage the player once per attack event, honouring post-hit immunity. Returns damage dealt. */

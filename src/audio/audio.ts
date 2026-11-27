@@ -45,6 +45,22 @@ let stingerName: keyof typeof STINGER_BASE | '' = ''
 let stingerLevel = 0
 let stingerWritten = -1
 let victoryStep = 0
+// The Watcher's recorded voice (original Piper/LibriTTS performances, see build_voice.py).
+// One dedicated source: a new line replaces the previous one, so voices never overlap. Music ducks
+// while he speaks; danger cues stay on the effects pool, unducked.
+const VOICE: Record<string, [string, number]> = {
+  opening: ['w_opening', 3.9], firstEcho: ['w_firstEcho', 3.1], firstSync: ['w_firstSync', 3.1],
+  corruption: ['w_corruption', 3.5], reclaimed: ['w_reclaimed', 2.8], redirected: ['w_redirected', 2.4],
+  firsttime: ['w_firsttime', 4.2], final: ['w_final', 3.1], lowhp: ['w_lowhp', 3.1], seal2: ['w_lowhp', 3.1],
+  victory: ['w_victory', 4.0], pursuit: ['w_pursuit', 3.8], resist: ['w_resist', 2.9]
+}
+let voiceSrc: Entity
+let voiceSeen = 0
+let duckUntil = 0
+let duckLevel = 0
+function voiceFor(key: string): [string, number] | undefined {
+  return VOICE[key] ?? (key.startsWith('pursuit') ? VOICE.pursuit : undefined)
+}
 
 function sourceEntity(): Entity {
   const e = engine.addEntity()
@@ -98,6 +114,7 @@ export function initAudio() {
     loops.set(name, { e, level: 0, written: 0 })
   }
   stinger = sourceEntity()
+  voiceSrc = sourceEntity()
   engine.addSystem(audioSystem, 50000, 'audio')
 }
 
@@ -128,6 +145,8 @@ function musicTargets(): Record<Loop, number> {
 }
 
 function mixMusic(dt: number) {
+  // smooth ~0.25 s duck under the Watcher's voice
+  duckLevel += ((state.time < duckUntil ? 1 : 0) - duckLevel) * Math.min(1, Math.min(0.1, dt) * 5)
   const targets = musicTargets()
   const g = musicGain()
   const step = Math.min(0.1, dt) / CROSSFADE
@@ -135,7 +154,8 @@ function mixMusic(dt: number) {
     const goal = targets[name]
     const fast = goal < L.level && (state.phase === 'defeat' ? 1.6 : state.phase === 'victory' ? 6 : 1)
     L.level += Math.sign(goal - L.level) * Math.min(Math.abs(goal - L.level), step * (fast || 1))
-    const vol = L.level * BASE[name] * g
+    const duck = 1 - (1 - (name === 'ambience' ? 0.5 : 0.45)) * duckLevel
+    const vol = L.level * BASE[name] * g * duck
     if (Math.abs(vol - L.written) > 0.002 || (vol === 0 && L.written !== 0)) {
       L.written = vol
       const m = AudioSource.getMutableOrNull(L.e)
@@ -165,6 +185,9 @@ function audioSystem(dt: number) {
       echoIds: [], introPlayed: false, seals: 0
     })
     victoryStep = 0
+    duckUntil = 0
+    voiceSeen = s.voiceSeq
+    if (AudioSource.has(voiceSrc)) AudioSource.getMutable(voiceSrc).volume = 0
   }
   if (!prev.introPlayed && s.phase === 'active' && s.time >= INTRO_AT) {
     prev.introPlayed = true
@@ -245,6 +268,17 @@ function audioSystem(dt: number) {
     }
   }
 
+  // Voice: play the recorded line for a newly spoken subtitle (the opening only on the first run).
+  if (s.voiceSeq !== voiceSeen) {
+    voiceSeen = s.voiceSeq
+    const v = voiceFor(s.voiceKey)
+    if (v && !(s.voiceKey === 'opening' && s.runId > 1)) {
+      const vol = sfxGain() * 1.0
+      AudioSource.createOrReplace(voiceSrc, { audioClipUrl: A(`voice/${v[0]}`), playing: false, loop: false, volume: vol, global: true })
+      if (vol > 0) AudioSource.playSound(voiceSrc, A(`voice/${v[0]}`))
+      duckUntil = s.time + v[1] - 0.6
+    }
+  }
   mixMusic(dt)
 
   prev.shots = s.shots
