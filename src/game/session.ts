@@ -39,8 +39,13 @@ export function endRun(reason: EndReason) {
     speak('victory', 'A moment I could not foresee...', 5, false)
     state.score = masteryScore(state.time, state.playerHp, state.fourWay, state.redirects)
     state.achievements = achievements()
-    state.newBest = state.score.total > state.personalBest
-    state.personalBest = Math.max(state.personalBest, state.score.total)
+    if (state.assist) {
+      state.newBest = state.score.total > state.personalBestGuided
+      state.personalBestGuided = Math.max(state.personalBestGuided, state.score.total)
+    } else {
+      state.newBest = state.score.total > state.personalBest
+      state.personalBest = Math.max(state.personalBest, state.score.total)
+    }
   }
   else {
     speak('defeat', 'This moment is mine to keep.', 5, false)

@@ -199,7 +199,7 @@ function fireHostile(e: Echo, origin: V3) {
     }
     const p = Transform.has(engine.PlayerEntity) ? Transform.get(engine.PlayerEntity).position : undefined
     if (p && p.y < 1.6 && pointSegmentDistance(v3(p.x, 1.0, p.z), origin, end) <= CORRUPTION.hitRadius) {
-      damagePlayer(CORRUPTION.hostileDamage, 'your corrupted echo')
+      damagePlayer(CORRUPTION.hostileDamage, 'your corrupted echo', { x: origin.x, z: origin.z })
     }
   }, 1.1, CORRUPTION.hostileSpeed)
 }

@@ -112,7 +112,9 @@ export const UI = {
   /** Draw a small scene crosshair while the cursor is locked. */
   showCrosshair: true,
   /** Development aids: debug line, F refills the boss, 1 swaps mask/helm. Off for release. */
-  showDebug: false
+  showDebug: false,
+  /** Local playtest summary printed to the preview console at the end of each run. */
+  telemetry: true
 } as const
 
 export const ECHO = {
@@ -194,7 +196,12 @@ export const ATTACKS = {
    */
   volley: { warning: 1.3, waves: 3, boltsPerWave: 14, waveInterval: 0.75, spinDeg: 9, speed: 9, damage: 8, hitRadius: 0.75, boltHeight: 1.15, jumpClear: 0.9 },
   /** BASELINE warning 2 s; 3 s so the adjacent safe quadrant is reachable on the larger floor. */
-  blindSpot: { warning: 3, safeSectorDeg: 90, vulnerability: 5, damage: 15 },
+  /** exposedBonus: during the vulnerability, spells and echoes cast FROM the exposed (blind)
+   *  quadrant deal this multiple; other directions keep the normal full-damage window. */
+  /** Temporal Pursuit: he replays the player's own last few seconds of movement as a crimson
+   *  afterimage. The path is shown and locked during the warning; the afterimage never chases. */
+  pursuit: { recordSeconds: 4, sampleEvery: 0.25, warning: 2.0, grace: 0.5, damage: 8, hitRadius: 0.9 },
+  blindSpot: { warning: 3, safeSectorDeg: 90, vulnerability: 5, damage: 15, exposedBonus: 1.5 },
   /** Phase III: warning with safe circles, 20-damage pulse, then the barrier opens. */
   finalObservation: { warning: 2.2, pulseDamage: 20, openWindow: 5.5, rest: 3.5, safeRadius: 3.2, safeRingFraction: 0.62 }
 } as const

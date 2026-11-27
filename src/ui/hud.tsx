@@ -2,7 +2,8 @@
 // titles, readable sans-serif instructions. Shows: boss name/phase + segmented health, vitality
 // and time, Imprint and Convergence readiness, four echo slots, a quadrant compass, objective,
 // contextual hints, attack names, the Watcher's subtitles, results. Debug line only if enabled.
-import { Color4 } from '@dcl/sdk/math'
+import { Color4, Vector3 } from '@dcl/sdk/math'
+import { Transform, engine } from '@dcl/sdk/ecs'
 import ReactEcs, { ReactEcsRenderer, UiEntity } from '@dcl/sdk/react-ecs'
 import { ARENA, BOSS, COLORS, ECHO, IMPRINT, PLAYER, UI } from '../config'
 import { isActive, state } from '../game/state'
@@ -10,7 +11,7 @@ import { remainingSeconds, retry, retryGuided } from '../game/session'
 import { currentAttack } from '../boss/attacks'
 import { objectiveText } from '../game/phases'
 import { oldestReplaceable, readyGroup, timeToFire } from '../echoes/echoLogic'
-import { readyWindow } from '../game/assist'
+import { readyWindow, formationSectors, requiredSectors } from '../game/assist'
 import { sectorOf } from '../combat/aim'
 import { LEVEL_STEPS, audioSettings, uiClick } from '../audio/audio'
 
@@ -37,6 +38,7 @@ function Hud() {
       {isActive() ? <ActiveHud /> : <Results />}
       <Entrance />
       <SoundPanel />
+      <DamageDirection />
       {UI.showDebug ? <Debug /> : null}
     </UiEntity>
   )
@@ -139,7 +141,7 @@ function Objective() {
 /** Short telegraph label: the floor shape is the real warning, this names it. */
 function AttackWarning() {
   const a = currentAttack()
-  if (!a || a === 'stolen' || a === 'blindspot' || a === 'observation' || a === 'volley') return null
+  if (!a || a === 'stolen' || a === 'blindspot' || a === 'observation' || a === 'volley' || a === 'pursuit') return null
   const text = a === 'gaze' ? 'THE GAZE  ·  step out of the crimson cone' : 'AFTERSHOCK  ·  jump the wave or stand in a pale gap'
   return (
     <UiEntity
@@ -176,7 +178,7 @@ function Results() {
       ? 'Tip: spread echoes over three quadrants (N/E/S/W runes) to break his barriers.'
       : 'Tip: leave the crimson cone, jump the ring or stand in a pale gap.'
   const sc = state.score
-  const offerGuided = !won && state.defeats >= 2 && !state.assist
+  const offerGuided = !won && state.defeats >= 1 && !state.assist
   const lines = [
     won ? `Time ${fmt(t)}   ·   Four-way Convergences ${state.fourWay}   ·   Redirects ${state.redirects}` : `${reason}  Reached phase ${['', 'I', 'II', 'III'][state.bossPhase]}   ·   Survived ${fmt(t)}`,
     `Best Convergence: ${state.bestConvergence > 0 ? `${state.bestConvergence} echoes` : 'none'}   ·   Vitality lost: ${Math.round(state.damageTaken)}`,
@@ -184,12 +186,13 @@ function Results() {
   ].filter((l) => l)
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
-      <UiEntity uiTransform={{ width: 620, height: won ? 400 : 330, flexDirection: 'column', alignItems: 'center', padding: 20, ...frame }} uiBackground={{ color: Color4.create(0.025, 0.025, 0.03, 0.9) }}>
+      <UiEntity uiTransform={{ width: 620, height: won ? (state.finalFormation.length ? 570 : 400) : 330, flexDirection: 'column', alignItems: 'center', padding: 20, ...frame }} uiBackground={{ color: Color4.create(0.025, 0.025, 0.03, 0.9) }}>
         <UiEntity uiTransform={{ width: '100%', height: 50 }} uiText={{ value: won ? 'THE FINAL REHEARSAL' : 'A MOMENT LOST', fontSize: 32, font: 'serif', color: c(won ? COLORS.syncGold : COLORS.dangerCrimson) }} />
         <UiEntity uiTransform={{ width: 300, height: 1, margin: { bottom: 8 } }} uiBackground={{ color: BORDER }} />
         <UiEntity uiTransform={{ width: '100%', height: 22, margin: { bottom: 6 } }} uiText={{ value: won ? 'Time moves forward again.' : 'The past can always be rewritten.', fontSize: 15, font: 'serif', color: c(COLORS.silver) }} />
+        {won && state.finalFormation.length ? <FormationMap /> : null}
         {won && sc ? (
-          <UiEntity uiTransform={{ width: '100%', height: 40 }} uiText={{ value: `MASTERY ${sc.total}   ·   GRADE ${sc.grade} · ${RANK_NAMES[sc.grade] ?? ''}${state.newBest ? '   ·   NEW PERSONAL BEST' : `   ·   best ${state.personalBest}`}`, fontSize: 19, color: c(COLORS.ivory) }} />
+          <UiEntity uiTransform={{ width: '100%', height: 40 }} uiText={{ value: `MASTERY ${sc.total}   ·   ${state.assist ? 'GUIDED  ·  ' : ''}GRADE ${sc.grade} · ${RANK_NAMES[sc.grade] ?? ''}${state.newBest ? '   ·   NEW PERSONAL BEST' : `   ·   best ${state.assist ? state.personalBestGuided : state.personalBest}`}`, fontSize: 19, color: c(COLORS.ivory) }} />
         ) : null}
         {lines.map((l, i) => (
           <UiEntity key={`line${i}`} uiTransform={{ width: '100%', height: 24 }} uiText={{ value: l, fontSize: 13, color: c(COLORS.ash) }} />
@@ -394,19 +397,34 @@ function Compass() {
     if (here.length) return c(COLORS.echoCyan)
     return c(COLORS.charcoal)
   })
+  // When a sector requirement is active, empty sides pulse gold: "put an echo here".
+  const need = requiredSectors()
+  const f = formationSectors()
+  const pulse = 0.5 + 0.5 * Math.abs(Math.sin(state.time * 4))
+  const wanted = (q: number) => need > 0 && f.covered.length < need && f.missing.includes(q)
   const dot = (q: number, top: number, left: number) => (
     <UiEntity
       key={`q${q}`}
-      uiTransform={{ positionType: 'absolute', position: { top, left }, width: 14, height: 14, borderColor: state.playerSector === q ? c(COLORS.ivory) : BORDER, borderWidth: state.playerSector === q ? 2 : 1, borderRadius: 3 }}
+      uiTransform={{
+        positionType: 'absolute', position: { top, left }, width: 14, height: 14, borderRadius: 3,
+        borderColor: wanted(q) ? c(COLORS.syncGold, pulse) : state.playerSector === q ? c(COLORS.ivory) : BORDER,
+        borderWidth: wanted(q) || state.playerSector === q ? 2 : 1
+      }}
       uiBackground={{ color: look[q] }}
     />
   )
   return (
-    <UiEntity uiTransform={{ width: 56, height: 50 }}>
+    <UiEntity uiTransform={{ width: 56, height: need > 0 ? 64 : 50 }}>
       {dot(0, 0, 21)}
       {dot(1, 18, 40)}
       {dot(2, 36, 21)}
       {dot(3, 18, 2)}
+      {need > 0 ? (
+        <UiEntity
+          uiTransform={{ positionType: 'absolute', position: { top: 51, left: -8 }, width: 72, height: 13 }}
+          uiText={{ value: `SIDES ${Math.min(f.covered.length, 4)}/${need}`, fontSize: 10, color: c(f.covered.length >= need ? COLORS.syncGold : COLORS.ash) }}
+        />
+      ) : null}
     </UiEntity>
   )
 }
@@ -479,6 +497,75 @@ function SoundPanel() {
           audioSettings.muted = !audioSettings.muted
           if (!audioSettings.muted) uiClick()
         }, 74)}
+      </UiEntity>
+    </UiEntity>
+  )
+}
+
+// Directional damage: a crimson marker on a ring around the crosshair, pointing toward where the
+// hit came from (relative to the camera), with the attack's name. Fades in 1.4 s.
+function DamageDirection() {
+  const since = state.time - state.playerHitAt
+  if (!isActive() || state.playerHitAt <= 0 || since > 1.4) return null
+  if (!Transform.has(engine.CameraEntity) || !Transform.has(engine.PlayerEntity)) return null
+  const cam = Transform.get(engine.CameraEntity)
+  const p = Transform.get(engine.PlayerEntity).position
+  const fwd = Vector3.rotate(Vector3.Forward(), cam.rotation)
+  const camYaw = Math.atan2(fwd.x, fwd.z)
+  const srcYaw = Math.atan2(state.lastHitFrom.x - p.x, state.lastHitFrom.z - p.z)
+  const rel = srcYaw - camYaw // 0 = ahead, +pi/2 = to the right
+  const a = Math.max(0, 1 - since / 1.4)
+  const R = 150
+  const x = Math.sin(rel) * R
+  const y = -Math.cos(rel) * R
+  const behind = Math.cos(rel) < -0.5
+  return (
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: '50%', left: '50%' }, width: 1, height: 1 }}>
+      <UiEntity
+        uiTransform={{ positionType: 'absolute', position: { left: x - 13, top: y - 13 }, width: 26, height: 26, borderRadius: 13, borderColor: c(COLORS.dangerCrimson, a), borderWidth: 3 }}
+        uiBackground={{ color: c(COLORS.dangerCrimson, 0.35 * a) }}
+      />
+      <UiEntity
+        uiTransform={{ positionType: 'absolute', position: { left: x - 90, top: y + (y > 0 ? 16 : -32) }, width: 180, height: 16 }}
+        uiText={{ value: `${behind ? 'BEHIND  ·  ' : ''}${state.lastHitBy ?? ''}`, fontSize: 12, color: c(COLORS.dangerCrimson, a) }}
+      />
+    </UiEntity>
+  )
+}
+
+// "Your Final Rehearsal": a top-down miniature of the formation that fired the finishing attack,
+// drawn from the player's actual echo positions (captured when the finale began).
+const MOMENTS = ['', 'One moment', 'Two moments', 'Three moments', 'Four moments']
+function FormationMap() {
+  const S = 150 // px
+  const half = S / 2
+  const R = ARENA.playableRadius + 2
+  const pts = state.finalFormation.map((p) => ({ x: half + ((p.x - ARENA.center.x) / R) * half, y: half - ((p.z - ARENA.center.z) / R) * half }))
+  const sides = new Set(state.finalFormation.map((p) => sectorOf({ x: p.x, y: 0, z: p.z }, ARENA.center, 4))).size
+  const n = Math.min(4, pts.length)
+  const dots: { x: number; y: number; k: string }[] = []
+  pts.forEach((p, i) => {
+    for (let j = 1; j < 7; j++) dots.push({ x: half + (p.x - half) * (j / 7), y: half + (p.y - half) * (j / 7), k: `l${i}_${j}` })
+  })
+  return (
+    <UiEntity uiTransform={{ width: '100%', height: 168, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', margin: { bottom: 6 } }}>
+      <UiEntity uiTransform={{ width: S, height: S, borderRadius: half, borderColor: BORDER, borderWidth: 1 }} uiBackground={{ color: Color4.create(0.06, 0.06, 0.07, 0.9) }}>
+        {/* sector boundaries (diagonals of the N/E/S/W quadrants are drawn as a cross for clarity) */}
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: half, top: 8 }, width: 1, height: S - 16 }} uiBackground={{ color: c(COLORS.silver, 0.18) }} />
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: 8, top: half }, width: S - 16, height: 1 }} uiBackground={{ color: c(COLORS.silver, 0.18) }} />
+        {dots.map((d) => (
+          <UiEntity key={d.k} uiTransform={{ positionType: 'absolute', position: { left: d.x - 1.5, top: d.y - 1.5 }, width: 3, height: 3, borderRadius: 2 }} uiBackground={{ color: c(COLORS.syncGold, 0.8) }} />
+        ))}
+        {pts.map((p, i) => (
+          <UiEntity key={`e${i}`} uiTransform={{ positionType: 'absolute', position: { left: p.x - 7, top: p.y - 7 }, width: 14, height: 14, borderRadius: 7, borderColor: c(COLORS.syncGold), borderWidth: 2 }} uiBackground={{ color: c(COLORS.echoCyan, 0.9) }} />
+        ))}
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: half - 8, top: half - 8 }, width: 16, height: 16, borderRadius: 8, borderColor: c(COLORS.ivory), borderWidth: 2 }} uiBackground={{ color: c(COLORS.dangerCrimson) }} />
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { left: half - 10, top: -2 }, width: 20, height: 12 }} uiText={{ value: 'N', fontSize: 9, color: c(COLORS.silver) }} />
+      </UiEntity>
+      <UiEntity uiTransform={{ width: 250, height: S, flexDirection: 'column', justifyContent: 'center', margin: { left: 18 } }}>
+        <UiEntity uiTransform={{ width: '100%', height: 18 }} uiText={{ value: 'YOUR FINAL REHEARSAL', fontSize: 12, color: c(COLORS.silver), textAlign: 'middle-left' }} />
+        <UiEntity uiTransform={{ width: '100%', height: 28 }} uiText={{ value: `${MOMENTS[n]}. One impossible outcome.`, fontSize: 15, font: 'serif', color: c(COLORS.syncGold), textAlign: 'middle-left' }} />
+        <UiEntity uiTransform={{ width: '100%', height: 20 }} uiText={{ value: `${n} echoes  ·  ${sides} direction${sides === 1 ? '' : 's'}${state.finaleHit ? '' : '  ·  flawless finale'}`, fontSize: 12, color: c(COLORS.ash), textAlign: 'middle-left' }} />
       </UiEntity>
     </UiEntity>
   )

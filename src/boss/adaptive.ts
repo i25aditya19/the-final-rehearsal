@@ -4,7 +4,7 @@
 //  - he adapts on at most every other attack, so the sequence stays learnable,
 //  - never the same attack three times in a row,
 //  - after the player has been hit repeatedly he grants extra recovery time instead of pressing.
-export type AdaptiveKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation' | 'volley'
+export type AdaptiveKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation' | 'volley' | 'pursuit'
 
 export type Signals = {
   /** Metres the player moved over the last ~6 s. */

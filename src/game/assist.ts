@@ -1,4 +1,4 @@
-// Guided rehearsal: offered after two defeats (never forced). Gives a little more warning time,
+// Guided rehearsal: offered after the first defeat (never forced). Gives a little more warning time,
 // a wider Convergence ready window, easier side requirements and softer hits, so a struggling
 // player still reaches the ending. Normal play is unchanged.
 import { CONVERGENCE, PHASES } from '../config'
@@ -18,3 +18,19 @@ export function withWarn<T extends { warning: number; lockedAim?: number }>(cfg:
 
 export const gateSectors = () => (state.assist ? ASSIST.gateSectors : PHASES.phase2GateSectors)
 export const finalSectors = () => (state.assist ? ASSIST.finalSectors : PHASES.phase3MinSectors)
+
+// ---- Formation requirements (shared by the Convergence check and the HUD compass) ----
+import { ARENA as _ARENA } from '../config'
+import { sectorOf as _sectorOf } from '../combat/aim'
+export const SECTOR_NAMES = ['north', 'east', 'south', 'west']
+/** Distinct sides a Convergence must come from right now (0 = no requirement). */
+export function requiredSectors(): number {
+  if (state.bossPhase === 2 && state.stage === 'gate') return gateSectors()
+  if (state.bossPhase === 3 && state.stage === 'fight') return finalSectors()
+  return 0
+}
+/** Sectors holding at least one friendly echo, and the empty ones. */
+export function formationSectors(): { covered: number[]; missing: number[] } {
+  const covered = [...new Set(state.echoes.filter((e) => !e.corrupted).map((e) => _sectorOf(e.pos, _ARENA.center, 4)))]
+  return { covered, missing: [0, 1, 2, 3].filter((q) => !covered.includes(q)) }
+}

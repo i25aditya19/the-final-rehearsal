@@ -6,7 +6,7 @@ import { main } from '../src/index'
 import { state, damagePlayer } from '../src/game/state'
 import { retry } from '../src/game/session'
 import { leaveEcho } from '../src/echoes/echoSystem'
-import { attackDebug } from '../src/boss/attacks'
+import { attackDebug, debugStartAttack } from '../src/boss/attacks'
 import { corruptionDebug } from '../src/boss/corruption'
 import { ARENA, BOSS, PHASES, SESSION } from '../src/config'
 import { hitBoss } from '../src/game/phases'
@@ -156,6 +156,24 @@ async function run() {
   check('phase III: seal, seal, finale (3 qualifying Convergences, 3 echoes)', s1.seal === 1 && s2.seal === 2 && !!s3.finale && inFinale, `seals ${s1.seal},${s2.seal},${s3.finale} hp-after ${state.bossHp}`)
   check('finale: his last resistance never kills; victory even as the time cap passes', state.phase === 'victory' && minHp >= 1, `phase ${state.phase} minHp ${minHp} formation ${state.finalFormation.length}`)
   check('finale formation captured from the actual echoes', state.finalFormation.length === 3)
+
+  // 8. Temporal Pursuit: it replays the recorded path (locked) and never chases.
+  retry()
+  await step(0.5)
+  state.bossPhase = 2
+  for (let i = 0; i <= 40; i++) { setPlayer(C.x - 10 + i * 0.5, C.z - 14); await step(0.1) } // walk 20 m east over 4 s
+  setPlayer(C.x, C.z + 15) // then far away, off the path
+  debugStartAttack('pursuit')
+  const hpA = state.playerHp
+  await step(7)
+  check('pursuit: afterimage walks the locked path and never chases (player off the path is safe)', state.playerHp === hpA && !attackDebug().kind, `hp ${hpA} -> ${state.playerHp}`)
+  // stand in the middle of the recorded path: hit once, never twice
+  for (let i = 0; i <= 40; i++) { setPlayer(C.x - 10 + i * 0.5, C.z - 14); await step(0.1) }
+  setPlayer(C.x - 0.0, C.z - 14)
+  debugStartAttack('pursuit')
+  const hpB = state.playerHp
+  await step(7)
+  check('pursuit: standing on the path is hit exactly once (8)', hpB - state.playerHp === 8, `hp ${hpB} -> ${state.playerHp}`)
 
   for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? `  [${r.detail}]` : ''}`)
   console.log(`QA ${results.filter((r) => r.ok).length}/${results.length} passed`)

@@ -1,6 +1,7 @@
 // Echo runtime: creation on cast, repeated spells every cycle, and Convergence on E.
 import { InputAction, PointerEventType, engine, inputSystem } from '@dcl/sdk/ecs'
-import { readyWindow } from '../game/assist'
+import { noteConvergenceFail } from '../game/telemetry'
+import { SECTOR_NAMES, formationSectors, readyWindow, requiredSectors } from '../game/assist'
 import { ARENA, COLORS, CONVERGENCE, ECHO, IMPRINT } from '../config'
 import { resolveShot, sectorOf } from '../combat/aim'
 import { bossHitVolume } from '../boss/watcher'
@@ -53,7 +54,7 @@ function echoSystem() {
     if (e.corrupted || state.time < e.nextFire) continue
     const shot = resolveShot(e.origin, e.dir, bossHitVolume(), IMPRINT.range, false, BOUNDS)
     launch(e.origin, shot.end, COLORS.echoCyan, shot.hit, () => {
-      if (shot.hit) hitBoss('echo', IMPRINT.echoDamage, undefined, shot.end)
+      if (shot.hit) hitBoss('echo', IMPRINT.echoDamage, undefined, shot.end, e.origin)
     }, 0.8)
     if (state.echoRepeats === 0) speak('firstEcho', 'There you are. Again.')
     state.echoRepeats++
@@ -86,15 +87,31 @@ export function resetConvergenceCharge() {
 /** E: fire every ready echo together. Invalid attempts never consume the cooldown. */
 function tryConvergence() {
   if (state.time < state.convergenceReadyAt) {
-    say(`Convergence recharging (${Math.ceil(state.convergenceReadyAt - state.time)}s)`)
+    noteConvergenceFail('recharging')
+    say(`Convergence is recovering (${Math.ceil(state.convergenceReadyAt - state.time)}s)`)
     return
   }
-  if (charge) return
+  if (charge || state.stage === 'finale') return
+  // Say exactly why a Convergence would not count, before it fires (no cooldown wasted).
+  if (state.bossPhase === 3 && state.stage === 'fight' && state.time > state.windowOpenUntil) {
+    noteConvergenceFail('sight closed')
+    say('Wait for his sight to open: the Final Observation opens a window.')
+    return
+  }
+  const need = requiredSectors()
+  const f = formationSectors()
+  if (need > 0 && f.covered.length < need) {
+    noteConvergenceFail('too few sides')
+    const add = f.missing.slice(0, need - f.covered.length).map((q) => SECTOR_NAMES[q]).join(' and ')
+    say(`He must be struck from ${need} sides (you hold ${f.covered.length}): create an echo to the ${add}.`, 3)
+    return
+  }
   const group = readyGroup(state.echoes, state.time, readyWindow())
   if (group.length < CONVERGENCE.minEchoes) {
     const friendly = state.echoes.filter((e) => !e.corrupted)
     if (friendly.length < CONVERGENCE.minEchoes) {
       const corrupted = state.echoes.some((e) => e.corrupted)
+      noteConvergenceFail(corrupted ? 'echo corrupted' : 'one echo')
       say(corrupted ? 'Reclaim your corrupted echo, or create another echo.' : 'Create another echo: cast from a second place.')
       return
     }

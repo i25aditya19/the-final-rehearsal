@@ -215,6 +215,7 @@ function audioSystem(dt: number) {
     else if (dbg.kind === 'blindspot') sfx('blindspot', 0.85)
     else if (dbg.kind === 'observation') sfx('observation', 0.95)
     else if (dbg.kind === 'volley') sfx('volley', 0.8)
+    else if (dbg.kind === 'pursuit') sfx('corruption', 0.85, 0.06, 0.8)
   }
   if (dbg.kind === 'gaze' && dbg.gazeStage === 'fire' && prev.gazeStage !== 'fire') sfx('gaze_fire', 0.9)
   if (dbg.kind === 'aftershock') {

@@ -73,6 +73,10 @@ export const state = {
   finalFormation: [] as { x: number; z: number }[],
   /** Echo ids of the Convergence being resolved right now. */
   convergingIds: [] as number[],
+  /** The Blind Spot's exposed quadrant (0 N, 1 E, 2 S, 3 W) while he is vulnerable. */
+  blindSector: -1,
+  /** Origin of the last hit taken (directional damage marker). */
+  lastHitFrom: { x: 40, z: 40 },
   saidLines: {} as Record<string, boolean>,
   /** Survive retries: defeats this session and the opt-in guided mode. */
   defeats: 0,
@@ -82,6 +86,8 @@ export const state = {
   achievements: [] as string[],
   score: undefined as undefined | { total: number; grade: string; speed: number; vitality: number; perfect: number; redirect: number },
   personalBest: 0,
+  /** Guided results are kept apart from standard ones. */
+  personalBestGuided: 0,
   newBest: false
 }
 
@@ -101,7 +107,8 @@ export function speak(key: string, text: string, seconds = 3.5, once = true) {
 }
 
 /** Damage the player once per attack event, honouring post-hit immunity. Returns damage dealt. */
-export function damagePlayer(amount: number, source: string): number {
+/** from: where the hit came from (defaults to the Watcher), for the directional HUD marker. */
+export function damagePlayer(amount: number, source: string, from?: { x: number; z: number }): number {
   // During the finale only his last resistance can touch the player (stray bolts or a hostile
   // echo shot already in flight cannot), and it never ends the run.
   if (state.stage === 'finale' && source !== 'his last resistance') return 0
@@ -112,6 +119,7 @@ export function damagePlayer(amount: number, source: string): number {
   state.playerImmuneUntil = state.time + PLAYER.postHitImmunity
   state.playerHitAt = state.time
   state.lastHitBy = source
+  state.lastHitFrom = from ?? { x: BOSS_CENTER.x, z: BOSS_CENTER.z }
   return dmg
 }
 
@@ -175,3 +183,5 @@ export function falseVictory(): { e: number; still: boolean; rewind: boolean } |
   const e = state.time - state.stageStartedAt
   return { e, still: e < 2.8, rewind: e >= 3.3 && e < 5.0 }
 }
+
+const BOSS_CENTER = { x: 40, z: 40 } // ARENA.center (kept local: state.ts has no config cycle)

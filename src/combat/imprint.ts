@@ -86,7 +86,7 @@ function imprintSystem() {
   const assisted = shot.assisted
   launch(castOrigin, shot.end, COLORS.echoCyan, shot.hit, () => {
     if (shot.hit) {
-      const out = hitBoss('direct', IMPRINT.directDamage, undefined, shot.end)
+      const out = hitBoss('direct', IMPRINT.directDamage, undefined, shot.end, castOrigin)
       state.hits++
       state.lastShot = { kind: 'hit', damage: out.damage, assisted, at: state.time }
     } else {

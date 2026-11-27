@@ -3,7 +3,8 @@
 import { Entity, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { autoCull } from '../effects/visibility'
 import { Color3, Color4, Vector3 } from '@dcl/sdk/math'
-import { ARENA, BOSS, COLORS, PHASES, PLAYER, SESSION } from '../config'
+import { ARENA, ATTACKS, BOSS, COLORS, PHASES, PLAYER, SESSION } from '../config'
+import { sectorOf } from '../combat/aim'
 import { BossCtx, Convergence, DamageKind, DamageOutcome, resolveBossDamage } from './phaseRules'
 import { isActive, say, speak, state, falseVictory } from './state'
 import { onReset } from './session'
@@ -36,11 +37,14 @@ export function bossCtx(): BossCtx {
 }
 
 /** The single entry point for damaging The Watcher. */
-export function hitBoss(kind: DamageKind, amount: number, conv?: Convergence, at?: { x: number; y: number; z: number }): DamageOutcome {
+export function hitBoss(kind: DamageKind, amount: number, conv?: Convergence, at?: { x: number; y: number; z: number }, origin?: { x: number; z: number }): DamageOutcome {
   if (!isActive()) return { damage: 0, deflected: false, gateBroken: false, reachedFloor: false }
   const ctx = bossCtx()
+  // Blind Spot: magic cast from the exposed quadrant strikes harder (rewards echoes placed there).
+  const fromBlind = ctx.vulnerable && origin && (kind === 'direct' || kind === 'echo') && sectorOf({ x: origin.x, y: 0, z: origin.z }, ARENA.center, 4) === state.blindSector
+  if (fromBlind) amount *= ATTACKS.blindSpot.exposedBonus
   const out = resolveBossDamage(ctx, kind, amount, rules(), conv)
-  if (out.damage > 0 && ctx.vulnerable && (kind === 'direct' || kind === 'echo')) state.blindHits++
+  if (out.damage > 0 && fromBlind) state.blindHits++
   if (out.deflected) {
     state.deflectAt = state.time
     if (at) burst(at, COLORS.ash, 0.5)

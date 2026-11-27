@@ -1,7 +1,7 @@
 // Boss attacks for M3: The Gaze (tracking cone that locks, then fires) and Aftershock (two
 // expanding ring waves with safe gaps; jumping also clears them). One attack at a time, with
 // recovery between them. Visuals are pooled primitives; hit tests are pure (attackMath.ts).
-import { Entity, GltfContainer, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
+import { Entity, GltfContainer, GltfNodeModifiers, Material, MaterialTransparencyMode, MeshRenderer, Transform, engine } from '@dcl/sdk/ecs'
 import { Color3, Color4, Quaternion, Vector3 } from '@dcl/sdk/math'
 import { ARENA, ATTACKS, COLORS, PHASES, SESSION } from '../config'
 import { gapLayout, inCone, ringSweptHits } from '../combat/attackMath'
@@ -16,11 +16,11 @@ import { setSparks } from '../effects/vfx'
 import { onReset } from '../game/session'
 import { ADAPTIVE_LINES, AdaptiveKind, Signals, chooseAdaptive, extraRecovery } from './adaptive'
 
-type AttackKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation' | 'volley'
+type AttackKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation' | 'volley' | 'pursuit'
 /** Attack order per phase (GAME_DESIGN 7.4 / 8). Phase I introduces Gaze then Aftershock. */
 const SEQUENCES: Record<1 | 2 | 3, AttackKind[]> = {
   1: ['gaze', 'gaze', 'aftershock'],
-  2: ['stolen', 'gaze', 'blindspot', 'volley', 'aftershock', 'gaze', 'blindspot', 'volley'],
+  2: ['stolen', 'gaze', 'blindspot', 'volley', 'aftershock', 'gaze', 'blindspot', 'pursuit'],
   3: ['observation', 'volley', 'observation', 'stolen', 'observation', 'gaze', 'volley']
 }
 /** At a gate only the basic attacks run, so the teaching moment stays readable. */
@@ -122,6 +122,8 @@ export function initAttacks() {
 
 function resetAttacks() {
   cancelCurrent()
+  footsteps.length = 0
+  lastFootstep = -1
   forcedNext = undefined
   finaleRing = false
   trail.length = 0
@@ -150,6 +152,7 @@ function cancelCurrent() {
   endAftershock()
   endBlindSpot()
   endObservation()
+  endPursuit()
 }
 
 // ---- adaptive layer inputs (sampled, cheap) ----
@@ -254,6 +257,7 @@ export function startFinaleInterference() {
 }
 
 function attackSystem() {
+  if (isActive()) recordFootsteps()
   if (state.stage === 'finale') {
     // Only his last resistance runs; nothing new starts.
     if (current === 'aftershock' && updateAftershock()) {
@@ -289,6 +293,7 @@ function attackSystem() {
     : current === 'stolen' ? updateCorruption()
     : current === 'blindspot' ? updateBlindSpot()
     : current === 'volley' ? updateVolley()
+    : current === 'pursuit' ? updatePursuit()
     : updateObservation()
   if (finished) {
     current = undefined
@@ -310,6 +315,7 @@ function startAttack(kind: AttackKind) {
   if (kind === 'blindspot') return startBlindSpot()
   if (kind === 'observation') return startObservation()
   if (kind === 'volley') return startVolley()
+  if (kind === 'pursuit') return startPursuit()
   if (kind === 'gaze') {
     gazeFired = false
     gazeStage = 'off'
@@ -558,7 +564,8 @@ function updateBlindSpot(): boolean {
     if (!inSafe) damagePlayer(b.damage, 'the Blind Spot')
     for (let q = 0; q < 4; q++) quadLook(q, q === safeQuadrant ? 'blind' : 'blast')
     state.vulnerableUntil = state.time + b.vulnerability
-    say('HE CANNOT SEE YOU  ·  strike from the blind spot!', 2.5)
+    state.blindSector = safeQuadrant
+    say(`HE CANNOT SEE YOU  ·  spells from the ${['north', 'east', 'south', 'west'][safeQuadrant]} strike ×1.5`, 2.5)
   }
   if (t >= b.warning + 0.35) for (let q = 0; q < 4; q++) if (q !== safeQuadrant) Transform.getMutable(quadrants[q].pivot).position = HIDDEN
   if (t >= b.warning + b.vulnerability) {
@@ -647,6 +654,122 @@ function endObservation() {
 }
 
 /** Read-only snapshot of what the floor telegraphs show (for the headless playtest bot in sim/). */
+// ---------------------------------------------------------------- Temporal Pursuit
+// The Watcher records where the player has been and replays it against them: "Even your
+// footsteps belong to me." The recorded path is drawn (crimson marks) and locked during the
+// warning; then a crimson afterimage of the player walks that exact path at the recorded pace.
+// It never steers toward the player's current position. One hit at most; a short grace period
+// after it appears so it can never land on the player unavoidably.
+const footsteps: { t: number; x: number; z: number }[] = []
+let lastFootstep = -1
+let pursuitPath: { x: number; z: number }[] = []
+let pursuitHit = false
+let pursuitMarks: Entity[] = []
+let pursuitGhost: Entity | undefined
+
+function recordFootsteps() {
+  const P = ATTACKS.pursuit
+  if (state.time - lastFootstep < P.sampleEvery) return
+  const p = playerPos()
+  if (!p) return
+  lastFootstep = state.time
+  footsteps.push({ t: state.time, x: p.x, z: p.z })
+  while (footsteps.length && state.time - footsteps[0].t > P.recordSeconds) footsteps.shift()
+}
+
+function ensurePursuit() {
+  if (pursuitGhost) return
+  const n = Math.round(ATTACKS.pursuit.recordSeconds / ATTACKS.pursuit.sampleEvery) + 1
+  for (let i = 0; i < n; i++) {
+    const e = engine.addEntity()
+    Transform.create(e, { position: HIDDEN, scale: Vector3.create(0.3, 0.3, 0.3) })
+    GltfContainer.create(e, { src: 'assets/fx/orb_crimson.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+    setShown(e, false)
+    pursuitMarks.push(e)
+  }
+  pursuitGhost = engine.addEntity()
+  Transform.create(pursuitGhost, { position: HIDDEN, scale: Vector3.create(1, 1, 1) })
+  GltfContainer.create(pursuitGhost, { src: 'assets/echoes/spectral_echo.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+  GltfNodeModifiers.create(pursuitGhost, {
+    modifiers: [{ path: '', castShadows: false, material: { material: { $case: 'pbr', pbr: {
+      albedoColor: Color4.create(0.85, 0.12, 0.22, 0.45), emissiveColor: Color3.create(0.9, 0.1, 0.25), emissiveIntensity: 2.5,
+      transparencyMode: 2, metallic: 0, roughness: 1 } } } }]
+  })
+  setShown(pursuitGhost, false)
+}
+
+function startPursuit() {
+  ensurePursuit()
+  pursuitHit = false
+  // Lock the path now (oldest first). Too little movement recorded? Fall back to a Gaze.
+  pursuitPath = footsteps.map((f) => ({ x: f.x, z: f.z }))
+  let travel = 0
+  for (let i = 1; i < pursuitPath.length; i++) travel += Math.hypot(pursuitPath[i].x - pursuitPath[i - 1].x, pursuitPath[i].z - pursuitPath[i - 1].z)
+  if (pursuitPath.length < 4 || travel < 2) {
+    current = 'gaze'
+    state.bossCasting = 'gaze'
+    startAttack('gaze')
+    return
+  }
+  pursuitPath.forEach((pt, i) => {
+    const m = pursuitMarks[i]
+    if (!m) return
+    Transform.getMutable(m).position = Vector3.create(pt.x, 0.3, pt.z)
+    setShown(m, true)
+  })
+  speak(`pursuit${state.runId}`, 'Even your footsteps belong to me.', 2.5, false)
+  say('TEMPORAL PURSUIT  ·  your own past path is coming  ·  keep clear of the crimson trail', ATTACKS.pursuit.warning + 1)
+}
+
+function updatePursuit(): boolean {
+  const P = ATTACKS.pursuit
+  const t = state.time - startedAt
+  if (t < P.warning) {
+    // the marks pulse while the path is locked in
+    const k = 0.26 + 0.08 * Math.sin(state.time * 10)
+    for (const m of pursuitMarks) Transform.getMutable(m).scale = Vector3.create(k, k, k)
+    return false
+  }
+  const replay = t - P.warning
+  const span = P.recordSeconds
+  const u = Math.min(1, replay / span) * (pursuitPath.length - 1)
+  const i = Math.min(pursuitPath.length - 2, Math.floor(u))
+  const f = u - i
+  const a = pursuitPath[i]
+  const b = pursuitPath[i + 1]
+  const x = a.x + (b.x - a.x) * f
+  const z = a.z + (b.z - a.z) * f
+  if (pursuitGhost) {
+    setShown(pursuitGhost, true)
+    const g = Transform.getMutable(pursuitGhost)
+    g.position = Vector3.create(x, ARENA.floorY, z)
+    g.rotation = Quaternion.fromEulerDegrees(0, (Math.atan2(b.x - a.x, b.z - a.z) * 180) / Math.PI, 0)
+  }
+  // marks it has passed fade out
+  for (let k = 0; k < pursuitMarks.length; k++) if (k < i) setShown(pursuitMarks[k], false)
+  const p = playerPos()
+  if (!pursuitHit && p && replay > P.grace && Math.hypot(p.x - x, p.z - z) < P.hitRadius) {
+    pursuitHit = true
+    damagePlayer(P.damage, 'your own past steps', { x, z })
+  }
+  if (replay >= span) {
+    endPursuit()
+    return true
+  }
+  return false
+}
+
+function endPursuit() {
+  for (const m of pursuitMarks) setShown(m, false)
+  if (pursuitGhost) setShown(pursuitGhost, false)
+}
+
+/** Test hook (sim/qa.ts only): start one attack now. */
+export function debugStartAttack(kind: AttackKind) {
+  cancelCurrent()
+  startAttack(kind)
+}
+
 export function attackDebug() {
   return {
     kind: current,
@@ -742,7 +865,7 @@ function updateVolley(): boolean {
       const d = pointSegmentDistance(v3(p.x, v.boltHeight, p.z), v3(b.px, v.boltHeight, b.pz), v3(b.x, v.boltHeight, b.z))
       if (d <= v.hitRadius) {
         volleyHit = true // one hit per volley
-        damagePlayer(v.damage, 'the Archive Volley')
+        damagePlayer(v.damage, 'the Archive Volley', { x: b.x, z: b.z })
       }
     }
   }
