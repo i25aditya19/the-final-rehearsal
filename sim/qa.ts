@@ -1,6 +1,6 @@
 // Functional QA in the real scene code (headless): restarts, post-victory safety, the Convergence
 // synchronization charge, the false victory, adaptive behaviour. run: npm run sim:qa
-import { InputAction, InputModifier, PointerEventType, PointerEventsResult, Transform, engine } from '@dcl/sdk/ecs'
+import { InputAction, InputModifier, MainCamera, PointerEventType, PointerEventsResult, Transform, engine } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { main } from '../src/index'
 import { state, damagePlayer } from '../src/game/state'
@@ -196,8 +196,28 @@ async function run() {
   ;(await import('../src/game/session')).endRun('boss')
   await step(3.2)
   const released = state.echoes.length === 0
-  await step(2)
-  check('victory: Victory pose, echoes released, movement returned', RA.emotes.includes('Victory') && released && !InputModifier.has(engine.PlayerEntity), `emotes ${RA.emotes} released ${released}`)
+  const camBound = MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity !== undefined
+  let outOfBounds = 0
+  let maxY = 0
+  await step(12.8, () => {
+    const vc = MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity
+    if (vc !== undefined) {
+      const p = Transform.get(vc as any).position
+      maxY = Math.max(maxY, p.y)
+      if (p.x < 0 || p.x > 80 || p.z < 0 || p.z > 80) outOfBounds++
+    }
+  })
+  const camAfter = MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity
+  check('victory: Victory pose, echoes released as light, cinematic camera bound', RA.emotes.includes('Victory') && released && camBound, `emotes ${RA.emotes} released ${released} cam ${camBound}`)
+  check('victory cinematic: stays inside the scene, rises above the dome, releases the camera and movement', outOfBounds === 0 && maxY > 36 && camAfter === undefined && !InputModifier.has(engine.PlayerEntity), `oob ${outOfBounds} maxY ${maxY.toFixed(1)} camAfter ${camAfter}`)
+  // skip with E
+  retry()
+  await step(0.5)
+  ;(await import('../src/game/session')).endRun('boss')
+  await step(3.5)
+  press(InputAction.IA_PRIMARY)
+  await step(0.6)
+  check('victory cinematic: E skips to the results', state.cinematicSkipAt > 0 && MainCamera.getOrNull(engine.CameraEntity)?.virtualCameraEntity === undefined && !InputModifier.has(engine.PlayerEntity))
   retry()
   await step(0.2)
   check('retry after an ending leaves no movement hold', !InputModifier.has(engine.PlayerEntity))

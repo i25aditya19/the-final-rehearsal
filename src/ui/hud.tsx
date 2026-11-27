@@ -5,7 +5,7 @@
 import { Color4, Vector3 } from '@dcl/sdk/math'
 import { Transform, engine } from '@dcl/sdk/ecs'
 import ReactEcs, { ReactEcsRenderer, UiEntity } from '@dcl/sdk/react-ecs'
-import { ARENA, BOSS, COLORS, ECHO, IMPRINT, PLAYER, UI } from '../config'
+import { ARENA, BOSS, COLORS, ECHO, IMPRINT, PLAYER, SESSION, UI } from '../config'
 import { isActive, state } from '../game/state'
 import { remainingSeconds, retry, retryGuided } from '../game/session'
 import { currentAttack } from '../boss/attacks'
@@ -13,6 +13,7 @@ import { objectiveText } from '../game/phases'
 import { oldestReplaceable, readyGroup, timeToFire } from '../echoes/echoLogic'
 import { readyWindow, formationSectors, requiredSectors } from '../game/assist'
 import { sectorOf } from '../combat/aim'
+import { cinematicActive, victoryResultsAt } from '../effects/cinematic'
 import { LEVEL_STEPS, audioSettings, uiClick } from '../audio/audio'
 
 const c = (hex: string, a = 1) => {
@@ -33,12 +34,12 @@ function Hud() {
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}>
       <HitFlash />
       <ConvergenceFlash />
-      <BossBar />
+      {cinematicActive() ? null : <BossBar />}
       <Subtitle />
       {isActive() ? <ActiveHud /> : <Results />}
       <EndCinematic />
       <Entrance />
-      <SoundPanel />
+      {cinematicActive() ? null : <SoundPanel />}
       <DamageDirection />
       {UI.showDebug ? <Debug /> : null}
     </UiEntity>
@@ -128,17 +129,33 @@ function EndCinematic() {
       </UiEntity>
     )
   }
-  if (t > 6.6) return null
-  const gold = t < 0.5 ? 0 : Math.max(0, 0.32 * (1 - Math.abs(t - 2.6) / 2.6))
-  const title = t < 2.4 ? 0 : t < 3.2 ? (t - 2.4) / 0.8 : t > 5.8 ? Math.max(0, (6.6 - t) / 0.8) : 1
+  if (t > SESSION.victoryResultsAt + 0.5 || (state.cinematicSkipAt > 0 && state.time > state.cinematicSkipAt + 0.3)) return null
+  const S = SESSION.cinematicStart
+  const fade = (a: number, b: number) => (t < a || t > b ? 0 : Math.min(1, (t - a) / 0.8, (b - t) / 0.8))
+  const gold = t < 0.5 ? 0 : Math.max(0, 0.3 * (1 - Math.abs(t - 2.4) / 2.4))
+  const title1 = fade(S + 3.0, S + 7.2)
+  const title2 = fade(S + 11.0, S + 13.8)
+  const bars = cinematicActive() ? Math.min(1, (t - S) / 0.6) : 0
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute', justifyContent: 'center', alignItems: 'center' }}>
       <EdgeGlow color={Color4.create(0.85, 0.72, 0.42, gold)} />
-      {title > 0 ? (
-        <UiEntity uiTransform={{ width: 900, height: 120, flexDirection: 'column', alignItems: 'center', margin: { bottom: 160 } }}>
-          <UiEntity uiTransform={{ width: '100%', height: 64 }} uiText={{ value: 'TIME MOVES FORWARD AGAIN', fontSize: 30 + 10 * title, font: 'serif', color: c(COLORS.syncGold, title) }} />
-          <UiEntity uiTransform={{ width: '100%', height: 30 }} uiText={{ value: 'The Watcher could not foresee this moment.', fontSize: 16, font: 'serif', color: c(COLORS.ivory, title * 0.85) }} />
+      {/* letterbox */}
+      <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 0, left: 0 }, width: '100%', height: `${9 * bars}%` }} uiBackground={{ color: Color4.create(0, 0, 0, 0.92) }} />
+      <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: 0, left: 0 }, width: '100%', height: `${9 * bars}%` }} uiBackground={{ color: Color4.create(0, 0, 0, 0.92) }} />
+      {title1 > 0 ? (
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: '16%' }, width: 900, height: 90, flexDirection: 'column', alignItems: 'center' }}>
+          <UiEntity uiTransform={{ width: '100%', height: 54 }} uiText={{ value: 'TIME MOVES FORWARD AGAIN', fontSize: 34, font: 'serif', color: c(COLORS.syncGold, title1) }} />
+          <UiEntity uiTransform={{ width: '100%', height: 28 }} uiText={{ value: 'The Watcher could not foresee this moment.', fontSize: 16, font: 'serif', color: c(COLORS.ivory, title1 * 0.85) }} />
         </UiEntity>
+      ) : null}
+      {title2 > 0 ? (
+        <UiEntity uiTransform={{ width: 1000, height: 140, flexDirection: 'column', alignItems: 'center' }}>
+          <UiEntity uiTransform={{ width: '100%', height: 80 }} uiText={{ value: 'THE FINAL REHEARSAL', fontSize: 52, font: 'serif', color: c(COLORS.ivory, title2) }} />
+          <UiEntity uiTransform={{ width: '100%', height: 30 }} uiText={{ value: 'Your past was your greatest weapon.', fontSize: 18, font: 'serif', color: c(COLORS.syncGold, title2 * 0.9) }} />
+        </UiEntity>
+      ) : null}
+      {cinematicActive() ? (
+        <UiEntity uiTransform={{ positionType: 'absolute', position: { bottom: '2.5%', right: 24 }, width: 160, height: 18 }} uiText={{ value: 'E  ·  skip', fontSize: 12, color: c(COLORS.silver, 0.7), textAlign: 'middle-right' }} />
       ) : null}
     </UiEntity>
   )
@@ -215,8 +232,9 @@ const RANK_NAMES: Record<string, string> = { C: 'APPRENTICE', B: 'TIMEWEAVER', A
 function Results() {
   const won = state.phase === 'victory'
   const since = state.time - state.endedAt
-  if (since < (won ? 6.5 : 2.8)) return null
-  const reveal = since - (won ? 6.5 : 2.8)
+  const at = won ? victoryResultsAt() : 2.8
+  if (since < at) return null
+  const reveal = since - at
   const t = state.endedAt
   const reason = state.endReason === 'time' ? 'Time ran out.' : state.endReason === 'health' ? `Your vitality was exhausted${state.lastHitBy ? ` by ${state.lastHitBy}` : ''}.` : ''
   const tip = state.convergences === 0

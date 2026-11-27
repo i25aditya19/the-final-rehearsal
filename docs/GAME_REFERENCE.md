@@ -427,6 +427,14 @@ A personal best is kept for the session ("NEW PERSONAL BEST"). Scenes have no lo
 
 ---
 
+## 13b. Endings
+- **Defeat:** the avatar is knocked out (built-in `knockOut` emote), movement is held for 2.6 s, every echo shatters into crimson and the screen closes in. Results appear at 2.8 s.
+- **Victory:**
+  - The avatar strikes the `Victory` pose and the echoes rise as gold light.
+  - A **16 s continuous cinematic camera** plays, with letterbox bars and titles: a hero close-up, a crane over the arena, a high view of the floor emblem, up through the dome, and a wide exterior of the chamber.
+  - **E skips** it.
+  - The results then reveal themselves: the score tallies, the rank stamps in and achievements chime in.
+
 ## 14. Audio
 
 All music and sound is **original, synthesized in code** for this project (no samples, no licensed or commercial music).
@@ -443,6 +451,7 @@ All music and sound is **original, synthesized in code** for this project (no sa
 | Victory | Silence, heartbeat, then a D-major resolution with bells |
 | Defeat | Fading strings, then a clock that slows and stops |
 
+- **Intensity layers:** each combat phase has a matching layer (taiko, brass stabs, tense tremolo strings, a ticking clock, risers) locked to its tempo. It plays quietly in every fight (30%, 42% or 55% by phase) and rises to full as the player's vitality falls to 30 or below. It's always full in the finale. Below 30 HP the vitality bar pulses and a quiet heartbeat plays.
 - All loops play from scene load and **crossfade by volume over 2.5 s**, so nothing restarts, duplicates or overlaps.
 - Music ducks during transitions and falls silent in the false victory.
 

@@ -27,7 +27,7 @@ function sessionSystem() {
     return
   }
   // Results screen: E also retries (the button needs a free cursor).
-  if (state.time - state.endedAt > (state.phase === 'victory' ? 6.5 : 2.8) && inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) retry()
+  if (state.time - state.endedAt > (state.phase === 'victory' ? (state.cinematicSkipAt > 0 ? Math.min(SESSION.victoryResultsAt, state.cinematicSkipAt - state.endedAt + 0.3) : SESSION.victoryResultsAt) + 0.5 : 2.8) && inputSystem.isTriggered(InputAction.IA_PRIMARY, PointerEventType.PET_DOWN)) retry()
 }
 
 export function endRun(reason: EndReason) {

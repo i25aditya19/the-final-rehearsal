@@ -248,6 +248,11 @@ function initFloor() {
     scale: Vector3.create(size, size, 1)
   })
   MeshRenderer.setPlane(floor)
+  // dark ground under the whole scene (seen in the exterior shot of the victory cinematic)
+  const ground = engine.addEntity()
+  Transform.create(ground, { position: Vector3.create(40, 0.05, 40), rotation: Quaternion.fromEulerDegrees(90, 0, 0), scale: Vector3.create(80, 80, 1) })
+  MeshRenderer.setPlane(ground)
+  Material.setPbrMaterial(ground, { albedoColor: Color4.create(0.035, 0.035, 0.04, 1), metallic: 0, roughness: 1, castShadows: false })
   MeshCollider.setPlane(floor, ColliderLayer.CL_PHYSICS)
   const tex = Material.Texture.Common({ src: 'assets/images/chamber_floor.jpg' })
   Material.setPbrMaterial(floor, {

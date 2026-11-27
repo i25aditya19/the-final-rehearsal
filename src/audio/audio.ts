@@ -25,10 +25,18 @@ const A = (n: string) => `assets/audio/${n}.ogg`
 export const audioSettings = { music: 0.8, sfx: 1.0, muted: false }
 export const LEVEL_STEPS = 10
 
-type Loop = 'score_entry' | 'score_p1' | 'score_p2' | 'score_final' | 'ambience'
-const LOOPS: Loop[] = ['score_entry', 'score_p1', 'score_p2', 'score_final', 'ambience']
+type Loop = 'score_entry' | 'score_p1' | 'score_p2' | 'score_final' | 'ambience' | 'score_p1_x' | 'score_p2_x' | 'score_final_x'
+// *_x: intensity layers (build_layers.py), same tempo/length as their phase loop, so they stay
+// locked together; raised as the player's vitality falls.
+const LOOPS: Loop[] = ['score_entry', 'score_p1', 'score_p2', 'score_final', 'ambience', 'score_p1_x', 'score_p2_x', 'score_final_x']
 /** Mix level of each loop at full music volume. */
-const BASE: Record<Loop, number> = { score_entry: 0.55, score_p1: 0.6, score_p2: 0.62, score_final: 0.66, ambience: 0.3 }
+const BASE: Record<Loop, number> = { score_entry: 0.55, score_p1: 0.6, score_p2: 0.62, score_final: 0.66, ambience: 0.3, score_p1_x: 0.62, score_p2_x: 0.64, score_final_x: 0.68 }
+/** Intensity: a baseline in every fight, rising to full as vitality falls (full at 30 and below). */
+export function musicIntensity(): number {
+  const hurt = Math.max(0, Math.min(1, (100 - state.playerHp) / 70))
+  const base = state.bossPhase === 3 ? 0.55 : state.bossPhase === 2 ? 0.42 : 0.3
+  return Math.min(1, base + (1 - base) * hurt)
+}
 const STINGER_BASE = { score_intro: 0.75, score_victory: 0.75, score_defeat: 0.7 }
 const CROSSFADE = 2.5 // seconds for a full crossfade
 /** Run time at which the boss-introduction stinger has built up and phase I takes over. */
@@ -121,7 +129,7 @@ export function initAudio() {
 /** Which loop should be heard now, and how loud the ambience is. */
 function musicTargets(): Record<Loop, number> {
   const s = state
-  const t: Record<Loop, number> = { score_entry: 0, score_p1: 0, score_p2: 0, score_final: 0, ambience: 1 }
+  const t: Record<Loop, number> = { score_entry: 0, score_p1: 0, score_p2: 0, score_final: 0, ambience: 1, score_p1_x: 0, score_p2_x: 0, score_final_x: 0 }
   const sinceEnd = s.time - s.endedAt
   if (s.phase === 'victory') {
     if (sinceEnd > 15) t.score_entry = 0.7
@@ -139,6 +147,11 @@ function musicTargets(): Record<Loop, number> {
       t.ambience = fv.still ? 0.35 : 0.6
       if (fv.e >= 3.3) t.score_final = 1
     }
+    // intensity layer of whichever phase loop is playing
+    const x = musicIntensity()
+    t.score_p1_x = t.score_p1 * x
+    t.score_p2_x = t.score_p2 * x
+    t.score_final_x = t.score_final * (s.stage === 'finale' ? 1 : x)
     t.ambience = s.bossPhase === 3 ? 0.5 : 0.8
   }
   return t

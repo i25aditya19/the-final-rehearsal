@@ -26,6 +26,10 @@ export const ARENA = {
 export const SESSION = {
   /** Hard combat cap including onboarding and transitions. */
   hardCapSeconds: 285,
+  /** Victory cinematic (s after the final blow): camera move, then the results. E skips. */
+  cinematicStart: 2.2,
+  cinematicEnd: 15.6,
+  victoryResultsAt: 16.0,
   /** Maximum length of the victory/defeat end sequence. */
   endSequenceMaxSeconds: 10,
   /** Largest dt a single frame may advance the simulation (protects against hitches). */

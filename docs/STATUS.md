@@ -215,6 +215,13 @@ Implemented (each verified by build + unit tests + sim + QA before the next):
 Measured (headless, real code): unit 51/51; sim all profiles 6/6 wins, ~93 s (phase III ~30 s + 6.5 s false victory; was ~100 s, which risked the 285 s cap for humans); QA 12/12; audio 11 sources, no duplicates; voice lines fire at the intended moments.
 Not possible from here: the jam page compliance check (fetch needs approval), any in-client verification, two visitors, human playtests.
 
+## Intensity and endings (2026-11-27 afternoon, creator request)
+- **Vitality bar** moved to bottom centre (the top-left panel was hidden under the client's location widget); damage chip, crimson pulse and quiet heartbeat at 30 or less.
+- **Intensity layers** (`score_*_x`): taiko ensemble, brass stabs, tremolo strings with a minor-second edge, 16th-note clock, risers; same tempo/length as each phase loop (locked). Level = phase baseline (0.30 / 0.42 / 0.55) rising to full as vitality falls to 30; full during the finale.
+- **Defeat**: knockOut emote, movement held 2.6 s, echoes shatter in crimson, the screen closes in; results at 2.8 s.
+- **Victory**: Victory pose; echoes released as gold light; one continuous **cinematic camera** (VirtualCamera, Catmull-Rom spline): hero close-up -> crane up over the arena -> high over the emblem -> through the dome -> wide exterior of the chamber (all inside the scene bounds); letterbox, "TIME MOVES FORWARD AGAIN" then "THE FINAL REHEARSAL" titles; E skips; results at 16 s tally the score, stamp the rank, chime the achievements. Dark ground plane under the whole scene for the exterior shot.
+- QA 17/17 (adds: knockOut/hold/shatter; Victory/release; camera bound, inside bounds, above the dome, released; E skip). Not seen in the client yet.
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.

@@ -7,7 +7,8 @@
 // Emotes are embedded in the Explorer (no download). Movement is released on retry or after the hold.
 import { InputModifier, engine } from '@dcl/sdk/ecs'
 import { triggerEmote } from '~system/RestrictedActions'
-import { COLORS } from '../config'
+import { COLORS, SESSION } from '../config'
+import { victoryResultsAt } from './cinematic'
 import { state } from '../game/state'
 import { onReset } from '../game/session'
 import { burst } from './vfx'
@@ -90,20 +91,21 @@ function endingsSystem() {
     s.echoes.length = 0
     sfx('echo_form', 0.8, 0.05, 1.5)
   }
-  if (step === 3 && t >= 4.2) {
+  if (step === 3 && (t >= SESSION.cinematicEnd || s.cinematicSkipAt > 0)) {
     step = 4
     hold(false)
   }
   // results reveal (hud.tsx): the score tallies, the rank stamps, achievements chime in one by one
-  if (step === 4 && t >= 6.6) {
+  const R = victoryResultsAt()
+  if (step === 4 && t >= R + 0.1) {
     step = 5
     sfx('ready', 0.6)
   }
-  if (step === 5 && t >= 6.5 + 1.7) {
+  if (step === 5 && t >= R + 1.7) {
     step = 6
     sfx('converge3', 0.75)
   }
-  const ach = Math.floor((t - 6.5 - 2.0) / 0.4) + 1
+  const ach = Math.floor((t - R - 2.0) / 0.4) + 1
   if (step >= 6 && ach > step - 6 && step - 6 < s.achievements.length) {
     step++
     sfx('echo_form', 0.6, 0.05, 1 + 0.12 * (step - 7))
