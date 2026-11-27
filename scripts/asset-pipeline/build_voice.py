@@ -36,6 +36,12 @@ LINES = {
     'victory':     ('A moment... I could not foresee...',                 1.28, 2.5, 0.40, 0.40, -17),  # quiet acceptance
     'pursuit':     ('Even your footsteps belong to me.',                  1.08, 2.5, 0.25, 0.28, -15),
     'resist':      ('No... not this moment...',                           1.15, 2.0, 0.30, 0.32, -15),
+    # rite invocations (first cast of each attack per run): menacing, measured
+    'inv_gaze':        ('Kneel... before my eye.',                       1.12, 2.5, 0.30, 0.30, -14),
+    'inv_aftershock':  ('Hear the hour toll.',                           1.10, 3.0, 0.35, 0.34, -14),
+    'inv_volley':      ('Burn, little moments.',                         1.05, 2.5, 0.28, 0.30, -14),
+    'inv_blindspot':   ('Run... while I still see you.',                 1.08, 2.0, 0.28, 0.30, -14),
+    'inv_observation': ('Now... I see everything.',                      1.15, 3.0, 0.35, 0.36, -13),
 }
 
 
@@ -77,5 +83,8 @@ def watcher(text, ls, semis, echo, rev, gain):
 if __name__ == '__main__':
     B.OUT = f'{repo}/assets/audio/voice'
     os.makedirs(B.OUT, exist_ok=True)
+    only = sys.argv[3].split(',') if len(sys.argv) > 3 else None
     for key, (text, ls, semis, echo, rev, gain) in LINES.items():
+        if only and key not in only:
+            continue
         B.write(f'w_{key}', watcher(text, ls, semis, echo, rev, gain), gain, 3)

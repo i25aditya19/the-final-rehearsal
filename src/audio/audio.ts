@@ -30,11 +30,12 @@ type Loop = 'score_entry' | 'score_p1' | 'score_p2' | 'score_final' | 'ambience'
 // locked together; raised as the player's vitality falls.
 const LOOPS: Loop[] = ['score_entry', 'score_p1', 'score_p2', 'score_final', 'ambience', 'score_p1_x', 'score_p2_x', 'score_final_x']
 /** Mix level of each loop at full music volume. */
-const BASE: Record<Loop, number> = { score_entry: 0.55, score_p1: 0.6, score_p2: 0.62, score_final: 0.66, ambience: 0.3, score_p1_x: 0.62, score_p2_x: 0.64, score_final_x: 0.68 }
+const BASE: Record<Loop, number> = { score_entry: 0.55, score_p1: 0.6, score_p2: 0.62, score_final: 0.66, ambience: 0.3, score_p1_x: 0.8, score_p2_x: 0.82, score_final_x: 0.86 }
 /** Intensity: a baseline in every fight, rising to full as vitality falls (full at 30 and below). */
 export function musicIntensity(): number {
   const hurt = Math.max(0, Math.min(1, (100 - state.playerHp) / 70))
-  const base = state.bossPhase === 3 ? 0.55 : state.bossPhase === 2 ? 0.42 : 0.3
+  // intense from the first attack; full force once vitality is at 30 or below
+  const base = state.bossPhase === 3 ? 0.8 : state.bossPhase === 2 ? 0.65 : 0.5
   return Math.min(1, base + (1 - base) * hurt)
 }
 const STINGER_BASE = { score_intro: 0.75, score_victory: 0.75, score_defeat: 0.7 }
@@ -60,7 +61,9 @@ const VOICE: Record<string, [string, number]> = {
   opening: ['w_opening', 3.9], firstEcho: ['w_firstEcho', 3.1], firstSync: ['w_firstSync', 3.1],
   corruption: ['w_corruption', 3.5], reclaimed: ['w_reclaimed', 2.8], redirected: ['w_redirected', 2.4],
   firsttime: ['w_firsttime', 4.2], final: ['w_final', 3.1], lowhp: ['w_lowhp', 3.1], seal2: ['w_lowhp', 3.1],
-  victory: ['w_victory', 4.0], pursuit: ['w_pursuit', 3.8], resist: ['w_resist', 2.9]
+  victory: ['w_victory', 4.0], pursuit: ['w_pursuit', 3.8], resist: ['w_resist', 2.9],
+  inv_gaze: ['w_inv_gaze', 3.2], inv_aftershock: ['w_inv_aftershock', 2.9], inv_volley: ['w_inv_volley', 3.0],
+  inv_blindspot: ['w_inv_blindspot', 3.3], inv_observation: ['w_inv_observation', 3.4]
 }
 let voiceSrc: Entity
 let voiceSeen = 0
@@ -218,7 +221,14 @@ function audioSystem(dt: number) {
   }
 
   // Low vitality: a quiet heartbeat (paired with the pulsing crimson bar)
-  if (s.phase === 'active' && s.playerHp > 0 && s.playerHp <= 30) sfx('heartbeat', 0.3, 1.3)
+  // faster and louder as it falls: ~57 bpm at 30, ~120 bpm near 0 (the HUD pulses with each beat)
+  if (s.phase === 'active' && s.playerHp > 0 && s.playerHp <= 30) {
+    const k = s.playerHp / 30
+    if (s.time - s.heartbeatAt >= 0.5 + 0.55 * k) {
+      s.heartbeatAt = s.time
+      sfx('heartbeat_hard', 1.0 - 0.35 * k, 0.2)
+    }
+  }
   // Player magic
   if (s.shots > prev.shots) sfx('cast', 0.8)
   // Each echo slot sings its own note of a D-minor chord, so synchronized echoes form a harmony.

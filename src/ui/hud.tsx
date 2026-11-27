@@ -13,6 +13,7 @@ import { objectiveText } from '../game/phases'
 import { oldestReplaceable, readyGroup, timeToFire } from '../echoes/echoLogic'
 import { readyWindow, formationSectors, requiredSectors } from '../game/assist'
 import { sectorOf } from '../combat/aim'
+import { FINALE_RITE, RITES, RiteKind } from '../boss/attackNames'
 import { cinematicActive, victoryResultsAt } from '../effects/cinematic'
 import { LEVEL_STEPS, audioSettings, uiClick } from '../audio/audio'
 
@@ -33,6 +34,7 @@ function Hud() {
   return (
     <UiEntity uiTransform={{ width: '100%', height: '100%', positionType: 'absolute' }}>
       <HitFlash />
+      <HeartPulse />
       <ConvergenceFlash />
       {cinematicActive() ? null : <BossBar />}
       <Subtitle />
@@ -202,16 +204,25 @@ function Objective() {
 }
 
 /** Short telegraph label: the floor shape is the real warning, this names it. */
+// The Watcher's rites: a crimson title as he casts (1.8 s), then the counter stays as a hint
+// while the attack runs.
 function AttackWarning() {
-  const a = currentAttack()
-  if (!a || a === 'stolen' || a === 'blindspot' || a === 'observation' || a === 'volley' || a === 'pursuit') return null
-  const text = a === 'gaze' ? 'THE GAZE  ·  step out of the crimson cone' : 'AFTERSHOCK  ·  jump the wave or stand in a pale gap'
+  const a = currentAttack() as RiteKind | undefined
+  if (!a || !RITES[a]) return null
+  const rite = state.stage === 'finale' ? FINALE_RITE : RITES[a]
+  const since = state.time - state.bossCastAt
+  const titleA = since < 0 ? 0 : since < 0.25 ? since / 0.25 : since < 1.8 ? 1 : Math.max(0, 1 - (since - 1.8) / 0.4)
   return (
-    <UiEntity
-      uiTransform={{ positionType: 'absolute', position: { top: 140, left: '50%' }, margin: { left: -230 }, width: 460, height: 28, justifyContent: 'center', ...frame }}
-      uiBackground={{ color: Color4.create(0.25, 0.03, 0.07, 0.55) }}
-      uiText={{ value: text, fontSize: 14, color: c(COLORS.ivory) }}
-    />
+    <UiEntity uiTransform={{ positionType: 'absolute', position: { top: 128, left: '50%' }, margin: { left: -330 }, width: 660, height: 76, flexDirection: 'column', alignItems: 'center' }}>
+      {titleA > 0 ? (
+        <UiEntity uiTransform={{ width: '100%', height: 44 }} uiText={{ value: rite.name, fontSize: 26 + 4 * Math.min(1, since / 0.25), font: 'serif', color: c(COLORS.dangerCrimson, titleA) }} />
+      ) : null}
+      <UiEntity
+        uiTransform={{ width: 520, height: 26, justifyContent: 'center', margin: { top: titleA > 0 ? 0 : 6 }, ...frame }}
+        uiBackground={{ color: Color4.create(0.25, 0.03, 0.07, 0.55) }}
+        uiText={{ value: rite.hint, fontSize: 13, color: c(COLORS.ivory) }}
+      />
+    </UiEntity>
   )
 }
 
@@ -634,4 +645,13 @@ function FormationMap() {
       </UiEntity>
     </UiEntity>
   )
+}
+
+// Low vitality: the screen edge throbs crimson with each heartbeat (audio.ts schedules the beats).
+function HeartPulse() {
+  if (!isActive() || state.playerHp > 30) return null
+  const since = state.time - state.heartbeatAt
+  if (since < 0 || since > 0.45) return null
+  const k = (1 - state.playerHp / 30) * 0.25 + 0.2
+  return <EdgeGlow color={Color4.create(0.55, 0.02, 0.1, k * (1 - since / 0.45))} />
 }

@@ -20,7 +20,7 @@ os.makedirs(OUT, exist_ok=True)
 COL = {'crimson': (197, 34, 63), 'ivory': (241, 239, 234), 'gold': (216, 183, 107), 'hot': (255, 96, 120)}
 
 
-def gradient_tex(color, kind, size=256):
+def gradient_tex(color, kind, size=256, safe=False):
     """RGBA texture. u runs across the shape (0..1), v runs radially outward (0..1)."""
     u = np.linspace(0, 1, size)[None, :]
     v = np.linspace(0, 1, size)[:, None]
@@ -29,6 +29,8 @@ def gradient_tex(color, kind, size=256):
         far = np.exp(-((1 - v) / 0.03) ** 2)                                           # bright far rim
         # Mostly transparent interior (the marble floor stays visible), bright readable outline.
         body = 0.10 + 0.10 * v
+        if safe:  # SAFE zones must be unmistakable: a solid luminous fill, not a hint
+            body = 0.42 + 0.12 * v
         stripes = 0.10 * (np.sin(v * 70) > 0.8)                                       # faint ripples
         a = np.clip(body + stripes + 0.9 * edge + 0.85 * far, 0, 1)
     elif kind == 'band':
@@ -36,14 +38,15 @@ def gradient_tex(color, kind, size=256):
     elif kind == 'strip':
         a = np.exp(-((v - 0.5) / 0.28) ** 2) * np.ones_like(u)
     else:  # disc: v = radius
-        a = np.clip(0.10 + 0.95 * np.exp(-((1 - v) / 0.05) ** 2) + 0.09 * (np.sin(v * 50) > 0.85), 0, 1) * np.ones_like(u)
+        fill = 0.5 + 0.15 * (np.sin(v * 22) > 0.6) if safe else 0.10
+        a = np.clip(fill + 0.95 * np.exp(-((1 - v) / 0.06) ** 2) + 0.09 * (np.sin(v * 50) > 0.85), 0, 1) * np.ones_like(u)
     rgb = np.ones((size, size, 3)) * np.array(color)[None, None, :]
     img = np.dstack([rgb, a * 255]).astype(np.uint8)
     return Image.fromarray(img, 'RGBA')
 
 
-def material(color, kind, strength=1.2):
-    tex = gradient_tex(color, kind)
+def material(color, kind, strength=1.2, safe=False):
+    tex = gradient_tex(color, kind, safe=safe)
     return trimesh.visual.material.PBRMaterial(
         baseColorTexture=tex, emissiveTexture=tex.convert("RGB"), emissiveFactor=[min(1.0, strength)] * 3,
         alphaMode='BLEND', doubleSided=True, metallicFactor=0.0, roughnessFactor=1.0)
@@ -126,11 +129,11 @@ def export(name, parts):
 export('wedge34_soft', [('wedge', mesh(*sector(34, 0.19), material(COL['crimson'], 'wedge', 0.9)))])
 export('wedge34_hot', [('wedge', mesh(*sector(34, 0.19), material(COL['hot'], 'wedge', 2.2)))])
 for c in ('crimson', 'ivory', 'gold'):
-    export(f'wedge88_{c}', [('wedge', mesh(*sector(88, 0.235, 48, 8), material(COL[c], 'wedge', 1.0 if c != 'crimson' else 1.1)))])
+    export(f'wedge88_{c}', [('wedge', mesh(*sector(88, 0.235, 48, 8), material(COL[c], 'wedge', 1.0 if c != 'crimson' else 1.1, safe=(c != 'crimson'))))])
 band_parts = []
 for i, (a0, a1) in enumerate(((25, 155), (205, 335))):
     band_parts.append((f'band{i}', mesh(*ribbon(a0, a1), material(COL['hot'], 'band', 2.0))))
     band_parts.append((f'strip{i}', mesh(*strip(a0, a1), material(COL['crimson'], 'strip', 1.6))))
 export('wave_band', band_parts)
 export('disc_crimson', [('disc', mesh(*disc(), material(COL['crimson'], 'disc', 0.9)))])
-export('disc_ivory', [('disc', mesh(*disc(), material(COL['ivory'], 'disc', 1.4)))])
+export('disc_ivory', [('disc', mesh(*disc(), material(COL['ivory'], 'disc', 1.0, safe=True)))])

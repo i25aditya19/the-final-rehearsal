@@ -75,6 +75,8 @@ export const state = {
   convergingIds: [] as number[],
   /** When the player skipped the victory cinematic (0 = not skipped). */
   cinematicSkipAt: 0,
+  /** Last low-vitality heartbeat (HUD pulse). */
+  heartbeatAt: -10,
   /** Last spoken line (the audio system voices it if a recording exists). */
   voiceKey: '',
   voiceSeq: 0,
@@ -165,6 +167,7 @@ export function resetState() {
   state.finalFormation = []
   state.convergingIds = []
   state.cinematicSkipAt = 0
+  state.heartbeatAt = -10
   state.bestConvergence = 0
   state.shots = 0
   state.hits = 0

@@ -85,7 +85,7 @@ export function startCorruption(): boolean {
   mode = 'warning'
   modeAt = state.time
   speak('corruption', 'Your past does not belong to you.')
-  say('STOLEN MOMENT  ·  shoot the crimson anchor to save your echo', 3)
+  say('Shoot the crimson anchor to save your echo', 3)
   return true
 }
 

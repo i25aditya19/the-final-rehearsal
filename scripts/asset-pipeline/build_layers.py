@@ -51,6 +51,17 @@ def riser(dur, gain=1.0):
     return (x * 0.5 + tone) * gain
 
 
+def braam(root, dur, gain=1.0):
+    """Saturated low brass cluster that swells: the 'braam' of a trailer score."""
+    n = int((dur + 0.3) * B.SR)
+    out = np.zeros(n, F32)
+    for mm in (root - 12, root - 5, root):
+        out[: len(brass(mm, dur, 1.0))] += brass(mm, dur, 1.0)[:n]
+    t = B.tt(n)
+    swell = np.clip(t / 0.35, 0, 1) * np.exp(-np.maximum(0, t - 0.6) / 0.9)
+    return np.tanh(out * swell * 2.2) * gain
+
+
 def layer(bpm, prog, density):
     beat = 60 / bpm
     bar = 4 * beat
@@ -76,6 +87,14 @@ def layer(bpm, prog, density):
         # ticking clock: sixteenths, time running out
         for e in range(16):
             T.add(t0 + e * beat / 4, B.tick(e % 4 == 0, 0.22 if e % 4 == 0 else 0.11), pan=0.55)
+        # braam on every other downbeat; choir stab; 16th taiko fill closing each pair of bars
+        if b % 2 == 0:
+            T.add(t0, braam(r, bar * 0.9, 0.55), pan=0.0)
+        for mm in ch:
+            T.add(t0, B.choir(mm + 12, beat * 0.6, 'ah', a=0.02, r=0.3, voices=4), pan=-0.3, gain=0.22 + 0.06 * density)
+        if b % 2 == 1:
+            for e in range(4):
+                T.add(t0 + 3 * beat + e * beat / 4, taiko(0.5 + 0.12 * e), pan=0.25)
         # riser into every fourth bar
         if b % 4 == 3:
             T.add(t0, riser(bar, 0.5))

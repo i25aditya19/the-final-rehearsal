@@ -9,11 +9,13 @@ import { distXZ, headingDeg, sub, v3 } from '../math/vec'
 import { damagePlayer, isActive, say, speak, state } from '../game/state'
 import { corruptionReady, startCorruption, updateCorruption } from './corruption'
 import { withWarn } from '../game/assist'
+import { spawnTracer } from '../effects/tracers'
 import { autoCull, setShown } from '../effects/visibility'
 import { pointSegmentDistance, sectorOf } from '../combat/aim'
 import { watcherEyePosition } from './watcher'
 import { setSparks } from '../effects/vfx'
 import { onReset } from '../game/session'
+import { RITES, RiteKind } from './attackNames'
 import { ADAPTIVE_LINES, AdaptiveKind, Signals, chooseAdaptive, extraRecovery } from './adaptive'
 
 type AttackKind = 'gaze' | 'aftershock' | 'stolen' | 'blindspot' | 'observation' | 'volley' | 'pursuit'
@@ -304,6 +306,9 @@ function attackSystem() {
 }
 
 function startAttack(kind: AttackKind) {
+  // first time this run: he names the rite aloud
+  const inv = RITES[kind as RiteKind]?.invocation
+  if (inv) speak(`inv_${kind}`, inv, 2.6)
   current = kind
   startedAt = state.time
   state.bossCasting = kind
@@ -603,15 +608,16 @@ function startObservation() {
   obsLook = ''
   const f = ATTACKS.finalObservation
   const R = ARENA.playableRadius
-  const tr = Transform.getMutable(obsDanger!)
-  tr.position = Vector3.create(center.x, 0.16, center.z)
-  tr.scale = Vector3.create(R, 1, R)
+  Transform.getMutable(obsDanger!).position = Vector3.create(center.x, 0.16, center.z)
+  show(obsDanger!, R, 1, R)
+  // Safe circles sit ABOVE every danger layer (the blast lifts to 0.33), and a tall column of
+  // ivory light rises from each so they can be found from anywhere in the chamber.
   safeCenters().forEach((c, i) => {
-    const s = Transform.getMutable(obsSafe[i])
-    s.position = Vector3.create(c.x, 0.1, c.z)
-    s.scale = Vector3.create(f.safeRadius, 1, f.safeRadius)
+    Transform.getMutable(obsSafe[i]).position = Vector3.create(c.x, 0.4, c.z)
+    show(obsSafe[i], f.safeRadius, 1, f.safeRadius)
+    spawnTracer({ x: c.x, y: 0.3, z: c.z }, { x: c.x, y: 9, z: c.z }, COLORS.ivory, false, { width: f.safeRadius * 0.55, seconds: f.warning + 0.6, intensity: 2.2 })
   })
-  say('THE FINAL OBSERVATION  ·  stand in a pale circle', f.warning)
+  say('Stand in a pale circle of light', f.warning)
 }
 
 function setObsLook(look: 'warn' | 'blast') {
@@ -718,7 +724,7 @@ function startPursuit() {
     setShown(m, true)
   })
   speak(`pursuit${state.runId}`, 'Even your footsteps belong to me.', 2.5, false)
-  say('TEMPORAL PURSUIT  ·  your own past path is coming  ·  keep clear of the crimson trail', ATTACKS.pursuit.warning + 1)
+  say('Your own past path is coming: keep clear of the crimson trail', ATTACKS.pursuit.warning + 1)
 }
 
 function updatePursuit(): boolean {
@@ -794,8 +800,10 @@ function ensureVolley() {
   const v = ATTACKS.volley
   for (let i = 0; i < v.waves * v.boltsPerWave; i++) {
     const e = engine.addEntity()
-    Transform.create(e, { position: HIDDEN, scale: Vector3.create(0.42, 0.42, 0.42) })
-    GltfContainer.create(e, { src: 'assets/fx/orb_crimson.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+    // 'Embers of the archive': crimson comets (white-hot core, halo, tapering tail, spinning rune ring)
+    Transform.create(e, { position: HIDDEN, scale: Vector3.create(1, 1, 1) })
+    GltfContainer.create(e, { src: 'assets/fx/hex_bolt.glb', visibleMeshesCollisionMask: 0, invisibleMeshesCollisionMask: 0 })
+    GltfNodeModifiers.create(e, { modifiers: [{ path: '', castShadows: false }] })
     setShown(e, false)
     bolts.push({ e, active: false, x: 0, z: 0, dx: 0, dz: 0, px: 0, pz: 0 })
   }
@@ -807,7 +815,7 @@ function startVolley() {
   lastVolleyFrame = state.time
   volleyWave = 0
   volleyHit = false
-  say('ARCHIVE VOLLEY  ·  slip between the crimson bolts', 2)
+  say('Slip between the embers, or jump them', 2)
 }
 
 function launchWave(w: number) {
@@ -841,6 +849,7 @@ function updateVolley(): boolean {
       const tr = Transform.getMutable(volleyWarn)
       tr.position = Vector3.create(center.x, 0.17, center.z)
       tr.scale = Vector3.create(k, 1, k)
+      setShown(volleyWarn, true)
     } else hide(volleyWarn)
   }
   while (volleyWave < v.waves && t >= v.warning + volleyWave * v.waveInterval) launchWave(volleyWave++)
@@ -860,7 +869,13 @@ function updateVolley(): boolean {
       continue
     }
     anyActive = true
-    Transform.getMutable(b.e).position = Vector3.create(b.x, v.boltHeight, b.z)
+    // fly nose-first, the rune ring rolling, a slight flicker
+    const bt = Transform.getMutable(b.e)
+    bt.position = Vector3.create(b.x, v.boltHeight, b.z)
+    const yaw = (Math.atan2(b.dx, b.dz) * 180) / Math.PI
+    bt.rotation = Quaternion.fromEulerDegrees(0, yaw, (state.time * 540 + b.dx * 90) % 360)
+    const fl = 0.95 + 0.1 * Math.sin(state.time * 31 + b.dz * 7)
+    bt.scale = Vector3.create(fl, fl, fl)
     if (!volleyHit && p && p.y - ARENA.floorY < v.jumpClear) {
       const d = pointSegmentDistance(v3(p.x, v.boltHeight, p.z), v3(b.px, v.boltHeight, b.pz), v3(b.x, v.boltHeight, b.z))
       if (d <= v.hitRadius) {

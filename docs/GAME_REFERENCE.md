@@ -249,6 +249,19 @@ The first attack comes at **12 s**. After each attack he waits **4.5 s** of reco
 
 ## 9. Boss attacks in detail
 
+**Named rites.** When the Watcher casts, a crimson title names the attack, and the counter stays on screen as a hint. The first time he casts each one in a run, he says its invocation aloud.
+
+| Attack | Rite name | Invocation |
+|---|---|---|
+| Gaze | Judgement of the Eye | "Kneel... before my eye." |
+| Aftershock | The Tolling Hour | "Hear the hour toll." |
+| Volley | Embers of the Archive | "Burn, little moments." (bolts are crimson comets) |
+| Blind Spot | Veil of the Blind | "Run... while I still see you." |
+| Final Observation | The All-Seeing Verdict | "Now... I see everything." Safe circles are solid ivory with columns of light |
+| Stolen Moment | Theft of the Hour | — |
+| Temporal Pursuit | Footsteps of the Damned | — |
+| Finale ring | The Last Bell | — |
+
 Every damaging attack has a readable warning (a floor telegraph and a sound on the same frame, plus the boss's wind-up) and a legitimate counter. Telegraphs are mostly transparent with bright outlines, so the floor stays visible.
 
 ### The Gaze: reaction and movement

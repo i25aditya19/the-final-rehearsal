@@ -1,6 +1,6 @@
 // Functional QA in the real scene code (headless): restarts, post-victory safety, the Convergence
 // synchronization charge, the false victory, adaptive behaviour. run: npm run sim:qa
-import { InputAction, InputModifier, MainCamera, PointerEventType, PointerEventsResult, Transform, engine } from '@dcl/sdk/ecs'
+import { GltfContainer, InputAction, InputModifier, MainCamera, PointerEventType, PointerEventsResult, Transform, VisibilityComponent, engine } from '@dcl/sdk/ecs'
 import { Vector3 } from '@dcl/sdk/math'
 import { main } from '../src/index'
 import { state, damagePlayer } from '../src/game/state'
@@ -221,6 +221,43 @@ async function run() {
   retry()
   await step(0.2)
   check('retry after an ending leaves no movement hold', !InputModifier.has(engine.PlayerEntity))
+
+  // 10. Final Observation safe circles are visible on EVERY cast (regression: hidden after the first),
+  //     and sit above the danger floor.
+  retry()
+  await step(0.5)
+  state.bossPhase = 3
+  const safeVisible = () => {
+    let n = 0, above = true
+    for (const [e, g] of engine.getEntitiesWith(GltfContainer)) {
+      if (!g.src.endsWith('disc_ivory.glb')) continue
+      const v = VisibilityComponent.getOrNull(e)
+      const tr = Transform.get(e)
+      if ((v === null || v.visible) && tr.scale.x > 0.5) { n++; if (tr.position.y < 0.34) above = false }
+    }
+    return { n, above }
+  }
+  const seen: { n: number; above: boolean }[] = []
+  for (let k = 0; k < 2; k++) {
+    debugStartAttack('observation')
+    await step(1)
+    seen.push(safeVisible())
+    await step(10)
+  }
+  check('Final Observation: 4 safe circles visible on the 1st and 2nd cast, above the danger floor', seen.every((x) => x.n === 4 && x.above), JSON.stringify(seen))
+
+  // 11. Low-vitality heartbeat: faster as vitality falls
+  retry()
+  await step(0.5)
+  const beats = async (hp: number) => {
+    state.playerHp = hp
+    let n = 0, last = state.heartbeatAt
+    await step(6, () => { if (state.heartbeatAt !== last) { n++; last = state.heartbeatAt } })
+    return n
+  }
+  const b30 = await beats(29)
+  const b5 = await beats(5)
+  check('heartbeat: none above 30, faster near death', b5 > b30 && b30 >= 4, `beats/6s at 29hp ${b30}, at 5hp ${b5}`)
 
   for (const r of results) console.log(`${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? `  [${r.detail}]` : ''}`)
   console.log(`QA ${results.filter((r) => r.ok).length}/${results.length} passed`)

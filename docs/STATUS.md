@@ -222,6 +222,14 @@ Not possible from here: the jam page compliance check (fetch needs approval), an
 - **Victory**: Victory pose; echoes released as gold light; one continuous **cinematic camera** (VirtualCamera, Catmull-Rom spline): hero close-up -> crane up over the arena -> high over the emblem -> through the dome -> wide exterior of the chamber (all inside the scene bounds); letterbox, "TIME MOVES FORWARD AGAIN" then "THE FINAL REHEARSAL" titles; E skips; results at 16 s tally the score, stamp the rank, chime the achievements. Dark ground plane under the whole scene for the exterior shot.
 - QA 17/17 (adds: knockOut/hold/shatter; Victory/release; camera bound, inside bounds, above the dome, released; E skip). Not seen in the client yet.
 
+## Rites, safe circles, intensity (2026-11-27 evening, creator feedback)
+- **Bug fixed (creator report: no pale spot in the final attack):** since the VisibilityComponent culling pass, the Final Observation danger floor, safe circles and the Volley warning disc were made visible only on the first cast (re-shown by scale, not visibility); the safe circles also sat under the danger floor. Now shown through `show()`, safe circles at y 0.4 above every danger layer, solid luminous fill, and a column of ivory light over each. Safe telegraphs (ivory/gold quadrants and circles) now use a solid fill; danger stays translucent. QA checks the 1st and 2nd cast.
+- **Embers of the Archive**: Volley bolts are crimson comets (white-hot core, halo, tapering tail, rolling rune ring), oriented to their flight.
+- **Heartbeat**: heavy saturated lub-DUB, 57 bpm at 30 HP rising to ~120 near 0, louder as it falls; the screen edge throbs with each beat.
+- **Intensity**: layers re-scored with braams, choir stabs and taiko fills; layer gain up; floor 0.5/0.65/0.8 by phase, full at 30 HP and below.
+- **Named rites** (src/boss/attackNames.ts): Judgement of the Eye, The Tolling Hour, Embers of the Archive, Veil of the Blind, The All-Seeing Verdict, Theft of the Hour, Footsteps of the Damned, The Last Bell. Crimson title on cast, hint stays while active; first cast per run is invoked aloud (5 new voiced lines).
+- QA 19/19; unit 51/51; sim unchanged (6/6 all profiles).
+
 ## Scene budget (25 parcels)
 
 250,000 triangles · 5,000 entities · 94 materials · 47 textures · World storage ~100 MB (organizer's wallet budget, not guaranteed) · 50 MB max per file.
